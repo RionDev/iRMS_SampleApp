@@ -1,9 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from '@common/pages/LoginPage';
 import { SignupPage } from '@common/pages/SignupPage';
+import { AppCenterMessage } from '@common/components/AppCenterMessage';
 import { AppLayout } from '@common/components/AppLayout';
 import { useAuthStore } from '@common/stores/authStore';
-import { useThemeStore } from '@common/stores/themeStore';
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -15,22 +15,9 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 }
 
 function PlaceholderPage() {
-  const { theme } = useThemeStore();
   return (
     <AppLayout appName="샘플" sidebarItems={[]} version={__APP_VERSION__}>
-      <div
-        style={{
-          height: '100%',
-          minHeight: '400px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: theme.fontSize.xl,
-          color: theme.colors.textMuted,
-        }}
-      >
-        아직 서비스 하지 않습니다.
-      </div>
+      <AppCenterMessage>아직 서비스 하지 않습니다.</AppCenterMessage>
     </AppLayout>
   );
 }
