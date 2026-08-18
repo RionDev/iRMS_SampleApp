@@ -13,7 +13,7 @@ rootElement.style.height = '100%';
 useAuthStore.getState().initialize().then(() => {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <BrowserRouter basename="/sample" future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+      <BrowserRouter basename="/sample">
         <App />
       </BrowserRouter>
     </React.StrictMode>,
