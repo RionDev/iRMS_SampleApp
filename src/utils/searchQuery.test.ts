@@ -18,6 +18,13 @@ const META: FilterMeta = {
   ],
   sources: [{ id: 50, name: 'honeypot' }],
   pools: [{ id: 60, name: 'black' }],
+  spectypes: [{ id: 70, name: 'NSIS Archive' }],
+  compilers: [{ id: 80, name: 'Visual C++ 2019' }],
+  linkers: [{ id: 90, name: 'MS Linker 14' }],
+  libraries: [{ id: 100, name: '.NET Framework' }],
+  crypters: [{ id: 110, name: 'UPX' }],
+  overlays: [{ id: 120, name: 'Authenticode' }],
+  resources: [{ id: 130, name: 'RT_ICON' }],
 };
 
 describe('parseSearchInput', () => {
@@ -54,6 +61,14 @@ describe('parseSearchInput', () => {
   it('존재하지 않는 사전 값은 에러', () => {
     const r = parseSearchInput('tag:nope', META);
     expect(r.errors).toHaveLength(1);
+  });
+
+  it('파일 타입 세부 필터(spectype/compiler 등)도 부분 일치로 검색된다', () => {
+    expect(parseSearchInput('spectype:nsis compiler:"visual c++ 2019"', META).filters).toEqual({
+      spectype: [70],
+      compiler: [80],
+    });
+    expect(parseSearchInput('crypter:upx', META).filters).toEqual({ crypter: [110] });
   });
 
   it('로케일은 알파-2 코드와 부분 일치를 지원한다', () => {

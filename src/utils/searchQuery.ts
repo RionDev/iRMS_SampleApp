@@ -14,6 +14,13 @@ import type { FilterMeta, FilterOption, SampleSearchQuery } from '../types/sampl
 export const DICT_MODIFIERS = {
   format: 'formats',
   category: 'categories',
+  spectype: 'spectypes',
+  compiler: 'compilers',
+  linker: 'linkers',
+  library: 'libraries',
+  crypter: 'crypters',
+  overlay: 'overlays',
+  resource: 'resources',
   pool: 'pools',
   locale: 'locales',
   source: 'sources',

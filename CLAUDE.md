@@ -11,19 +11,22 @@ BE 는 sample-service (`/api/sample/*`).
 필터는 적용되지 않는다. 구 `/multi` 경로는 `/` 리다이렉트로만 남아 있다.
 
 필터는 검색어 내 `key:값` 문법으로 지정한다 (`utils/searchQuery.ts`):
-사전 필터 7종(`format/category/pool/locale/source/tag/label`)은 `/meta/filters` 의
-name/label 을 대소문자 무시로 id 변환해 BE 파라미터로 보낸다.
+사전 필터 14종(`format/category/spectype/compiler/linker/library/crypter/overlay/
+resource/pool/locale/source/tag/label`)은 `/meta/filters` 의 name/label 을
+대소문자 무시로 id 변환해 BE 파라미터로 보낸다.
 정확 일치 우선, 없으면 부분 일치 (예: `locale:KR`, `locale:china`) —
-단일 lookup 필터(format/category/pool/locale/source)는 걸린 id 전부를 반복
-파라미터로 보내 BE 가 OR(in_) 검색하고, tag/label 은 AND 규약이라 여러 건이면
-후보와 함께 에러. `ratio:30..70`/`date:2026-01-01..` 범위 문법 지원.
+tag/label 을 제외한 단일 lookup 필터는 걸린 id 전부를 반복 파라미터로 보내
+BE 가 OR(in_) 검색하고, tag/label 은 AND 규약이라 여러 건이면 후보와 함께 에러.
+`ratio:30..70`/`date:2026-01-01..` 범위 문법 지원.
 모르는 key 의 콜론 토큰은 진단명 텍스트로 남긴다 (예: `Trojan:Win32/...`).
 진단명은 항상 부분일치(substring)로 검색한다 (매칭 모드 select 없음).
 입력 오류(없는 값, tag 모호 등)는 검색바 아래 오류 스트립에 전문 표시.
 
-검색바 부가 UI 두 가지: "필터 ▾" 버튼은 드롭다운/입력 패널을 펼치며 선택 시
-검색어에 `key:값` 토큰을 삽입/교체한다 (`upsertModifierToken`). "?" 버튼은
-문법 도움말 + 사전 값 목록(아코디언/검색) 팝오버.
+검색바 부가 UI 두 가지: 필터(깔때기 아이콘) 버튼은 검색바 블럭을 아래로 확장해
+select 2행 + 진단율/등록일 행을 펼치고, 선택 시 검색어에 `key:값` 토큰을
+삽입/교체한다 (`upsertModifierToken`). 확장 높이는 `SAMPLE_SEARCHBAR_EXPANDED_H`
+로 SearchPage 의 useFixedPageSize overhead 에 보정된다. "?" 버튼은 문법 도움말 +
+사전 값 목록(아코디언/검색) 팝오버 (오버레이).
 
 샘플 상세는 라우트 없이 검색 화면의 오버레이 `Drawer` 로 연다
 (`components/SampleDetailPanel.tsx`, admin 패턴) — 검색/페이지 상태가 유지된다.

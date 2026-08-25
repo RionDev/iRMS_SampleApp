@@ -119,6 +119,21 @@ const LABEL_NAMES = [
 export const TAGS: FilterOption[] = TAG_NAMES.map((name, i) => ({ id: i + 1, name }));
 export const LABELS: FilterOption[] = LABEL_NAMES.map((name, i) => ({ id: i + 1, name }));
 
+// 파일 타입 세부 사전 — null 은 "값 없는 샘플" 생성용 (FILTER_META 에는 미포함)
+const SPECTYPES = ['Unknown', '7z', 'Zip', 'NSIS Archive', 'PDF', 'MS Word', null];
+const COMPILERS = ['Unknown', 'Visual C++ 2019', 'Visual C++ 6.0', 'GCC', 'Delphi', null];
+const LINKERS = ['Unknown', 'MS Linker 14', 'MS Linker 6', null];
+const LIBRARIES = ['Unknown', '.NET Framework', 'MFC', 'Qt', null];
+const CRYPTERS = ['Unknown', 'UPX', 'Themida', 'VMProtect', null, null];
+const OVERLAYS = ['Unknown', 'Authenticode', 'ZIP SFX', null, null];
+const RESOURCES = ['Unknown', 'RT_ICON', 'RT_VERSION', null];
+
+function toOptions(names: (string | null)[]): FilterOption[] {
+  return names
+    .filter((name): name is string => name !== null)
+    .map((name, i) => ({ id: i + 1, name }));
+}
+
 export const FILTER_META: FilterMeta = {
   tags: TAGS,
   labels: LABELS,
@@ -128,6 +143,13 @@ export const FILTER_META: FilterMeta = {
   locales: LOCALES,
   sources: SOURCES,
   pools: POOLS,
+  spectypes: toOptions(SPECTYPES),
+  compilers: toOptions(COMPILERS),
+  linkers: toOptions(LINKERS),
+  libraries: toOptions(LIBRARIES),
+  crypters: toOptions(CRYPTERS),
+  overlays: toOptions(OVERLAYS),
+  resources: toOptions(RESOURCES),
 };
 
 // ---------------------------------------------------------------------------
@@ -157,14 +179,6 @@ const DIAGNAME_POOL: string[] = Array.from({ length: 400 }, makeDiagname);
 // ---------------------------------------------------------------------------
 // 샘플 생성
 // ---------------------------------------------------------------------------
-
-const SPECTYPES = ['Unknown', '7z', 'Zip', 'NSIS Archive', 'PDF', 'MS Word', null];
-const COMPILERS = ['Unknown', 'Visual C++ 2019', 'Visual C++ 6.0', 'GCC', 'Delphi', null];
-const LINKERS = ['Unknown', 'MS Linker 14', 'MS Linker 6', null];
-const LIBRARIES = ['Unknown', '.NET Framework', 'MFC', 'Qt', null];
-const CRYPTERS = ['Unknown', 'UPX', 'Themida', 'VMProtect', null, null];
-const OVERLAYS = ['Unknown', 'Authenticode', 'ZIP SFX', null, null];
-const RESOURCES = ['Unknown', 'RT_ICON', 'RT_VERSION', null];
 
 const SAMPLE_COUNT = 1337;
 const NOW = Date.now();

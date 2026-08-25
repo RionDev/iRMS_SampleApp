@@ -12,7 +12,11 @@ import { usePagedNav } from '@common/hooks/usePagedNav';
 import { useThemeStore } from '@common/stores/themeStore';
 import { CopyButton } from '../components/CopyButton';
 import { SampleDetailPanel } from '../components/SampleDetailPanel';
-import { SAMPLE_SEARCHBAR_H, SampleSearchBar } from '../components/SampleSearchBar';
+import {
+  SAMPLE_SEARCHBAR_EXPANDED_H,
+  SAMPLE_SEARCHBAR_H,
+  SampleSearchBar,
+} from '../components/SampleSearchBar';
 import { SampleTable, sampleKey } from '../components/SampleTable';
 import {
   batchDownload,
@@ -52,6 +56,9 @@ export function SearchPage() {
   const [req, setReq] = useState<SearchRequest>({ mode: 'single', query: {} });
   // 상세는 페이지 이동 대신 오버레이 드로어 — 검색 결과/페이지 상태가 유지된다 (admin 패턴)
   const [detailHash, setDetailHash] = useState<string | null>(null);
+  // 필터 패널 확장 시 검색바 블럭이 커지므로 테이블 overhead 를 보정한다
+  const [barExpanded, setBarExpanded] = useState(false);
+  const overhead = OVERHEAD + (barExpanded ? SAMPLE_SEARCHBAR_EXPANDED_H - SAMPLE_SEARCHBAR_H : 0);
 
   useEffect(() => {
     let active = true;
@@ -75,11 +82,19 @@ export function SearchPage() {
       version={__APP_VERSION__}
       contentMaxWidth="1700px"
     >
-      <SampleSearchBar meta={meta} onSearch={setReq} />
+      <SampleSearchBar meta={meta} onSearch={setReq} onExpandChange={setBarExpanded} />
       {req.mode === 'single' ? (
-        <SingleResults query={req.query} onSelect={(s) => setDetailHash(sampleKey(s))} />
+        <SingleResults
+          query={req.query}
+          overhead={overhead}
+          onSelect={(s) => setDetailHash(sampleKey(s))}
+        />
       ) : (
-        <MultiResults hashes={req.hashes} onSelect={(s) => setDetailHash(sampleKey(s))} />
+        <MultiResults
+          hashes={req.hashes}
+          overhead={overhead}
+          onSelect={(s) => setDetailHash(sampleKey(s))}
+        />
       )}
       <Drawer isOpen={detailHash !== null} onClose={() => setDetailHash(null)} width="880px">
         {detailHash && (
@@ -93,14 +108,16 @@ export function SearchPage() {
 /** 단일 검색 (해시 1개/진단명 + 상세 필터) — cursor 페이지네이션 */
 function SingleResults({
   query,
+  overhead,
   onSelect,
 }: {
   query: SampleSearchQuery;
+  overhead: number;
   onSelect: (sample: SampleSummary) => void;
 }) {
   const filterKey = JSON.stringify(query);
 
-  const pageSize = useFixedPageSize({ overhead: OVERHEAD, rowHeight: TABLE_ROW_H });
+  const pageSize = useFixedPageSize({ overhead, rowHeight: TABLE_ROW_H });
 
   const fetcher = useCallback(
     (cursor: string | undefined, snapshotIdx: number | undefined, size: number) =>
@@ -145,9 +162,11 @@ function SingleResults({
  */
 function MultiResults({
   hashes,
+  overhead,
   onSelect,
 }: {
   hashes: string[];
+  overhead: number;
   onSelect: (sample: SampleSummary) => void;
 }) {
   const { theme, isDarkMode } = useThemeStore();
@@ -189,7 +208,7 @@ function MultiResults({
   }, [hashesKey]);
 
   const pageSize = useFixedPageSize({
-    overhead: OVERHEAD + MULTI_TOOLBAR_H,
+    overhead: overhead + MULTI_TOOLBAR_H,
     rowHeight: TABLE_ROW_H,
   });
 

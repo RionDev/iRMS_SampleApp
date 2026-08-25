@@ -16,6 +16,8 @@ import {
 
 /** 검색바(1행) 고정 높이 — useFixedPageSize overhead 계산용 */
 export const SAMPLE_SEARCHBAR_H = 72;
+/** 필터 패널 확장 시 높이 (선택 2행 + 진단율/등록일 1행 추가) */
+export const SAMPLE_SEARCHBAR_EXPANDED_H = 212;
 
 /** 도움말 섹션당 한 번에 보여줄 값 칩 수 (로케일 등 사전이 커서 제한) */
 const HELP_CHIP_LIMIT = 30;
@@ -24,30 +26,63 @@ interface SampleSearchBarProps {
   /** GET /meta/filters 응답 (로딩 전 null — 필터 문법 사용 시 안내) */
   meta: FilterMeta | null;
   onSearch: (req: SearchRequest) => void;
+  /** 필터 패널 확장 여부 변경 알림 — 부모의 useFixedPageSize overhead 보정용 */
+  onExpandChange?: (expanded: boolean) => void;
 }
 
-/** 도움말 팝오버의 사전 필터 섹션 정의 */
-const DICT_SECTIONS: { key: keyof typeof DICT_MODIFIERS; label: string }[] = [
-  { key: 'format', label: '파일 포맷' },
-  { key: 'category', label: '파일 타입 분류' },
+/** 사전 필터 섹션 정의 — 필터 패널 select 행/도움말 팝오버 공용 (short: 좁은 select 용) */
+const DICT_SECTIONS: { key: keyof typeof DICT_MODIFIERS; label: string; short?: string }[] = [
+  { key: 'format', label: '파일 포맷', short: '포맷' },
+  { key: 'category', label: '파일 타입 분류', short: '분류' },
+  { key: 'spectype', label: '세부 타입' },
+  { key: 'compiler', label: '컴파일러' },
+  { key: 'linker', label: '링커' },
+  { key: 'library', label: '라이브러리' },
+  { key: 'crypter', label: '크립터' },
+  { key: 'overlay', label: '오버레이' },
+  { key: 'resource', label: '리소스' },
   { key: 'pool', label: '풀' },
   { key: 'locale', label: '로케일' },
-  { key: 'source', label: '수집 소스' },
+  { key: 'source', label: '수집 소스', short: '소스' },
   { key: 'tag', label: '태그' },
-  { key: 'label', label: '위협 유형 (VT 라벨)' },
+  { key: 'label', label: '위협 유형 (VT 라벨)', short: '위협 유형' },
 ];
+
+/** 필터 패널 select 배치 — 1행: 파일 타입 관련 9종(좁게), 2행: 나머지 5종 */
+const PANEL_ROWS = [
+  { sections: DICT_SECTIONS.slice(0, 9), minWidth: '76px' },
+  { sections: DICT_SECTIONS.slice(9), minWidth: '104px' },
+];
+
+/** 특수 값(미분류/실패류)은 이름순에 묻히지 않게 목록 최상단으로 올린다 */
+const SPECIAL_OPTION_RANK: Record<string, number> = {
+  unknown: 0,
+  fail: 1,
+  multi: 2,
+  error: 3,
+};
+
+function sortSpecialFirst(options: FilterOption[]): FilterOption[] {
+  return [...options].sort((a, b) => {
+    const ra = SPECIAL_OPTION_RANK[a.name.toLowerCase()] ?? 99;
+    const rb = SPECIAL_OPTION_RANK[b.name.toLowerCase()] ?? 99;
+    return ra - rb; // 특수 값만 앞으로, 나머지는 원래 순서(이름순) 유지 — sort 는 stable
+  });
+}
 
 function FilterSelect({
   value,
   placeholder,
   options,
   isLocale,
+  minWidth = '104px',
   onChange,
 }: {
   value: string;
   placeholder: string;
   options: FilterOption[] | undefined;
   isLocale?: boolean;
+  minWidth?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -55,19 +90,21 @@ function FilterSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={!options}
-      style={{ minWidth: '104px', flex: 1 }}
+      title={placeholder}
+      style={{ minWidth, flex: 1 }}
     >
       <option value="">{placeholder} 전체</option>
-      {options?.map((o) => (
-        <option key={o.id} value={o.id}>
-          {isLocale && o.label ? `${o.label} — ${o.name}` : o.name}
-        </option>
-      ))}
+      {options &&
+        sortSpecialFirst(options).map((o) => (
+          <option key={o.id} value={o.id}>
+            {isLocale && o.label ? `${o.label} — ${o.name}` : o.name}
+          </option>
+        ))}
     </SearchSelect>
   );
 }
 
-export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
+export function SampleSearchBar({ meta, onSearch, onExpandChange }: SampleSearchBarProps) {
   const { theme, isDarkMode } = useThemeStore();
   const [q, setQ] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
@@ -118,11 +155,15 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
         ? theme.colors.primary
         : theme.colors.textMuted;
 
+  const setFilterPanel = (open: boolean) => {
+    setFilterOpen(open);
+    onExpandChange?.(open);
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (hasError) return;
     setHelpOpen(false);
-    setFilterOpen(false);
     if (isMulti) {
       onSearch({ mode: 'multi', hashes: hashes.valid });
       return;
@@ -135,13 +176,6 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
         match: isDiagname ? 'substring' : undefined,
       },
     });
-  };
-
-  const handleReset = () => {
-    setQ('');
-    setHelpOpen(false);
-    setFilterOpen(false);
-    onSearch({ mode: 'single', query: {} });
   };
 
   // 여러 줄 해시 목록 붙여넣기 지원 — input 은 개행을 버리므로 공백으로 정규화해 삽입
@@ -211,7 +245,7 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
       style={{
         position: 'relative',
         backgroundColor: theme.colors.surface,
-        height: `${SAMPLE_SEARCHBAR_H}px`,
+        height: `${filterOpen ? SAMPLE_SEARCHBAR_EXPANDED_H : SAMPLE_SEARCHBAR_H}px`,
         padding: '16px 24px',
         borderRadius: theme.radius.md,
         border: `1px solid ${theme.colors.border}`,
@@ -219,76 +253,186 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
         marginBottom: '16px',
         boxSizing: 'border-box',
         flexShrink: 0,
+        transition: 'height 150ms ease',
+        overflow: 'visible',
       }}
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <SearchInput
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onPaste={handlePaste}
-          placeholder='해시(여러 개 가능)/진단명 — 필터: label:trojan tag:stealer format:exe ratio:30..70'
-          style={{ flex: 1, minWidth: '280px' }}
-        />
-        <span
-          title={hint}
-          style={{
-            maxWidth: '320px',
-            flexShrink: 0,
-            fontSize: theme.fontSize.sm,
-            color: hintColor,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {hint}
-        </span>
-        <span
-          aria-hidden
-          style={{
-            width: '1px',
-            height: '24px',
-            backgroundColor: theme.colors.border,
-            margin: '0 4px',
-          }}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            setFilterOpen((v) => !v);
-            setHelpOpen(false);
-          }}
-          title="필터 선택 패널"
-          aria-expanded={filterOpen}
-        >
-          필터 {filterOpen ? '▴' : '▾'}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            setHelpOpen((v) => !v);
-            setFilterOpen(false);
-          }}
-          title="필터 문법 도움말"
-          aria-expanded={helpOpen}
-        >
-          ?
-        </Button>
-        <Button type="submit" disabled={hasError}>
-          검색
-        </Button>
-        <Button type="button" variant="secondary" onClick={handleReset}>
-          초기화
-        </Button>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <SearchInput
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onPaste={handlePaste}
+            placeholder='해시(여러 개 가능)/진단명 — 필터: label:trojan tag:stealer format:exe ratio:30..70'
+            style={{ flex: 1, minWidth: '280px' }}
+          />
+          <span
+            title={hint}
+            style={{
+              maxWidth: '320px',
+              flexShrink: 0,
+              fontSize: theme.fontSize.sm,
+              color: hintColor,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {hint}
+          </span>
+          <span
+            aria-hidden
+            style={{
+              width: '1px',
+              height: '24px',
+              backgroundColor: theme.colors.border,
+              margin: '0 4px',
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setFilterPanel(!filterOpen);
+              setHelpOpen(false);
+            }}
+            title="필터 선택 패널"
+            aria-label="필터 선택 패널"
+            aria-expanded={filterOpen}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ display: 'block' }}
+              aria-hidden
+            >
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setHelpOpen((v) => !v);
+              setFilterPanel(false);
+            }}
+            title="필터 문법 도움말"
+            aria-expanded={helpOpen}
+          >
+            ?
+          </Button>
+          <Button type="submit" disabled={hasError}>
+            검색
+          </Button>
+        </div>
+
+        {/* 필터 선택 행 — 선택하면 검색어에 key:값 토큰이 삽입/교체된다 (블럭 확장) */}
+        {filterOpen && (
+          <>
+            {PANEL_ROWS.map((row, i) => (
+              <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {row.sections.map(({ key, label, short }) => (
+                  <FilterSelect
+                    key={key}
+                    placeholder={short ?? label}
+                    value={dictValue(key)}
+                    options={meta?.[DICT_MODIFIERS[key]]}
+                    isLocale={key === 'locale'}
+                    minWidth={row.minWidth}
+                    onChange={(v) => setDict(key, v)}
+                  />
+                ))}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <span
+                style={{
+                  fontSize: theme.fontSize.sm,
+                  fontWeight: 600,
+                  color: theme.colors.textMuted,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                진단율 (%)
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <SearchInput
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={ratioMin}
+                  onChange={(e) => setRatio(e.target.value, ratioMax)}
+                  placeholder="0"
+                  title="진단율 하한"
+                  style={{ minWidth: '72px', width: '72px', textAlign: 'center' }}
+                />
+                <span style={{ color: theme.colors.textMuted }}>~</span>
+                <SearchInput
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={ratioMax}
+                  onChange={(e) => setRatio(ratioMin, e.target.value)}
+                  placeholder="100"
+                  title="진단율 상한"
+                  style={{ minWidth: '72px', width: '72px', textAlign: 'center' }}
+                />
+              </span>
+              <span
+                aria-hidden
+                style={{
+                  width: '1px',
+                  height: '24px',
+                  backgroundColor: theme.colors.border,
+                  margin: '0 4px',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: theme.fontSize.sm,
+                  fontWeight: 600,
+                  color: theme.colors.textMuted,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                등록일
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <SearchInput
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDates(e.target.value, dateTo)}
+                  title="등록일 시작"
+                  style={{ minWidth: '164px', width: '164px' }}
+                />
+                <span style={{ color: theme.colors.textMuted }}>~</span>
+                <SearchInput
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDates(dateFrom, e.target.value)}
+                  title="등록일 끝"
+                  style={{ minWidth: '164px', width: '164px' }}
+                />
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
+                선택하면 검색어에 <span style={codeStyle}>key:값</span> 으로 반영됩니다
+              </span>
+            </div>
+          </>
+        )}
       </form>
 
-      {/* 검색바 아래 오버레이 스택: 오류 안내 / 필터 패널 / 도움말 */}
+      {/* 검색바 아래 오버레이 스택: 오류 안내 / 도움말 */}
       <div
         style={{
           position: 'absolute',
-          top: `${SAMPLE_SEARCHBAR_H - 6}px`,
+          top: `${(filterOpen ? SAMPLE_SEARCHBAR_EXPANDED_H : SAMPLE_SEARCHBAR_H) - 6}px`,
           left: '24px',
           right: '24px',
           zIndex: 20,
@@ -320,78 +464,6 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
         </div>
       )}
 
-      {/* 필터 선택 패널 — 선택하면 검색어에 key:값 토큰이 삽입/교체된다 */}
-      {filterOpen && (
-        <div
-          style={{
-            pointerEvents: 'auto',
-            backgroundColor: theme.colors.surface,
-            border: `1px solid ${theme.colors.border}`,
-            borderRadius: theme.radius.md,
-            boxShadow: theme.shadow.card,
-            padding: '14px 20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {DICT_SECTIONS.map(({ key, label }) => (
-              <FilterSelect
-                key={key}
-                placeholder={label}
-                value={dictValue(key)}
-                options={meta?.[DICT_MODIFIERS[key]]}
-                isLocale={key === 'locale'}
-                onChange={(v) => setDict(key, v)}
-              />
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted, whiteSpace: 'nowrap' }}>
-              진단율
-            </span>
-            <SearchInput
-              type="number"
-              min={0}
-              max={100}
-              value={ratioMin}
-              onChange={(e) => setRatio(e.target.value, ratioMax)}
-              placeholder="0"
-              style={{ minWidth: '64px', width: '64px' }}
-            />
-            <span style={{ color: theme.colors.textMuted }}>~</span>
-            <SearchInput
-              type="number"
-              min={0}
-              max={100}
-              value={ratioMax}
-              onChange={(e) => setRatio(ratioMin, e.target.value)}
-              placeholder="100"
-              style={{ minWidth: '64px', width: '64px' }}
-            />
-            <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted, whiteSpace: 'nowrap', marginLeft: '8px' }}>
-              등록일
-            </span>
-            <SearchInput
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDates(e.target.value, dateTo)}
-              style={{ minWidth: '128px', width: '128px' }}
-            />
-            <span style={{ color: theme.colors.textMuted }}>~</span>
-            <SearchInput
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDates(dateFrom, e.target.value)}
-              style={{ minWidth: '128px', width: '128px' }}
-            />
-            <span style={{ marginLeft: 'auto', fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
-              선택하면 검색어에 <span style={codeStyle}>key:값</span> 으로 반영됩니다
-            </span>
-          </div>
-        </div>
-      )}
 
       {helpOpen && (
         <div
@@ -521,7 +593,7 @@ export function SampleSearchBar({ meta, onSearch }: SampleSearchBarProps) {
                           padding: '4px 0 4px 18px',
                         }}
                       >
-                        {visible.slice(0, HELP_CHIP_LIMIT).map((o) => {
+                        {sortSpecialFirst(visible).slice(0, HELP_CHIP_LIMIT).map((o) => {
                           // locale 은 국명 대신 알파-2 코드 칩으로 (개수가 많고 코드 입력이 간편)
                           const value = key === 'locale' ? (o.label ?? o.name) : o.name;
                           return (

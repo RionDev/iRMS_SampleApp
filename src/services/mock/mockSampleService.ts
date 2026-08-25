@@ -82,6 +82,13 @@ function matchesQuery(s: SampleDetail, query: SampleSearchQuery): boolean {
   if (!inNames(FILTER_META.categories, query.category, s.category)) return false;
   if (!inNames(FILTER_META.locales, query.locale, s.locale)) return false;
   if (!inNames(FILTER_META.sources, query.source, s.source)) return false;
+  if (!inNames(FILTER_META.spectypes, query.spectype, s.type?.spectype ?? null)) return false;
+  if (!inNames(FILTER_META.compilers, query.compiler, s.type?.compiler ?? null)) return false;
+  if (!inNames(FILTER_META.linkers, query.linker, s.type?.linker ?? null)) return false;
+  if (!inNames(FILTER_META.libraries, query.library, s.type?.library ?? null)) return false;
+  if (!inNames(FILTER_META.crypters, query.crypter, s.type?.crypter ?? null)) return false;
+  if (!inNames(FILTER_META.overlays, query.overlay, s.type?.overlay ?? null)) return false;
+  if (!inNames(FILTER_META.resources, query.resource, s.type?.resource ?? null)) return false;
 
   for (const tagId of query.tag ?? []) {
     const tag = nameOf(FILTER_META.tags, tagId);

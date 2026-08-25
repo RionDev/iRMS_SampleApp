@@ -8,14 +8,17 @@
 - **샘플 검색**: SHA256/MD5 해시 또는 진단명 검색(항상 부분일치), cursor 기반
   이전/다음 페이지네이션. 필터는 VirusTotal 스타일 검색 문법으로 검색어에 섞어
   쓴다 — `format:exe category:document pool:black locale:KR source:x
-  tag:stealer label:trojan` (`tag`/`label`은 반복 시 AND, 공백 값은 `tag:"a b"`.
+  tag:stealer label:trojan` 에 더해 파일 타입 세부 필터
+  `spectype:` `compiler:` `linker:` `library:` `crypter:` `overlay:` `resource:`
+  지원 (`tag`/`label`은 반복 시 AND, 공백 값은 `tag:"a b"`.
   label 은 trojan/ransomware 같은 VT 위협 유형, category 는 Archive/Document
   같은 파일 타입 분류), `ratio:30..70`·`ratio:50`(진단율),
   `date:2026-01-01..2026-06-30`(등록일).
   사전 값은 부분 입력 허용 — `locale:china`처럼 여러 값에 걸리면 전부 OR 검색
   (tag/label 은 AND 규약이라 유일해야 하며, 모호하면 후보 안내).
-  "필터 ▾" 버튼의 드롭다운 패널에서 고르면 검색어에 토큰이 자동 반영되고,
-  "?" 도움말에서 문법·값 목록 확인 가능. 입력 오류는 검색바 아래에 전문 표시
+  필터(깔때기) 버튼을 누르면 검색바 블럭이 확장되어 select 로 고를 수 있고
+  선택하면 검색어에 토큰이 자동 반영된다. "?" 도움말에서 문법·값 목록 확인 가능.
+  입력 오류는 검색바 아래에 전문 표시
 - **멀티 해시 검색**: 검색바에 해시 목록(최대 500개)을 붙여넣으면 같은 화면에서
   일치/불일치 분리 표시 (VirusTotal 방식 — 별도 화면 없음, 상세 필터 미적용),
   최대 50개 선택 배치 다운로드 (AES ZIP, 비밀번호 `infected`)

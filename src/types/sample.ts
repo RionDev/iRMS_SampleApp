@@ -69,6 +69,13 @@ export interface FilterMeta {
   locales: FilterOption[];
   sources: FilterOption[];
   pools: FilterOption[];
+  spectypes: FilterOption[];
+  compilers: FilterOption[];
+  linkers: FilterOption[];
+  libraries: FilterOption[];
+  crypters: FilterOption[];
+  overlays: FilterOption[];
+  resources: FilterOption[];
 }
 
 export type MatchMode = 'prefix' | 'substring';
@@ -85,6 +92,13 @@ export interface SampleSearchQuery {
   source?: number[];
   format?: number[];
   category?: number[];
+  spectype?: number[];
+  compiler?: number[];
+  linker?: number[];
+  library?: number[];
+  crypter?: number[];
+  overlay?: number[];
+  resource?: number[];
   /** 반복 지정 시 AND */
   tag?: number[];
   label?: number[];
