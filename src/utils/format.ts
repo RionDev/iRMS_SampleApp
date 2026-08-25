@@ -51,3 +51,11 @@ export function saveBlob(blob: Blob, filename: string): void {
   anchor.remove();
   URL.revokeObjectURL(url);
 }
+
+/** 알파-2 국가 코드 → 국기 이모지 (형식이 아니면 null — 예: '??' Unknown) */
+export function flagEmoji(code: string): string | null {
+  if (!/^[A-Za-z]{2}$/.test(code)) return null;
+  return String.fromCodePoint(
+    ...[...code.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65),
+  );
+}

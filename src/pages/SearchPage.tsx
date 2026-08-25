@@ -60,6 +60,17 @@ export function SearchPage() {
   const [barExpanded, setBarExpanded] = useState(false);
   const overhead = OVERHEAD + (barExpanded ? SAMPLE_SEARCHBAR_EXPANDED_H - SAMPLE_SEARCHBAR_H : 0);
 
+  // 로케일 국명 → 알파-2 코드 (테이블 국기 표시용)
+  const localeCodes = useMemo(
+    () =>
+      new Map(
+        (meta?.locales ?? [])
+          .filter((o) => o.label)
+          .map((o) => [o.name, o.label as string]),
+      ),
+    [meta],
+  );
+
   useEffect(() => {
     let active = true;
     getFilterMeta()
@@ -87,12 +98,14 @@ export function SearchPage() {
         <SingleResults
           query={req.query}
           overhead={overhead}
+          localeCodes={localeCodes}
           onSelect={(s) => setDetailHash(sampleKey(s))}
         />
       ) : (
         <MultiResults
           hashes={req.hashes}
           overhead={overhead}
+          localeCodes={localeCodes}
           onSelect={(s) => setDetailHash(sampleKey(s))}
         />
       )}
@@ -109,10 +122,12 @@ export function SearchPage() {
 function SingleResults({
   query,
   overhead,
+  localeCodes,
   onSelect,
 }: {
   query: SampleSearchQuery;
   overhead: number;
+  localeCodes: Map<string, string>;
   onSelect: (sample: SampleSummary) => void;
 }) {
   const filterKey = JSON.stringify(query);
@@ -134,7 +149,7 @@ function SingleResults({
 
   return (
     <TableBlock>
-      <SampleTable items={nav.items} onSelect={onSelect} />
+      <SampleTable items={nav.items} onSelect={onSelect} localeCodes={localeCodes} />
       {nav.loading && <TableEmptyState>로딩 중...</TableEmptyState>}
       {!nav.loading && nav.error && <TableEmptyState>{nav.error}</TableEmptyState>}
       {!nav.loading && !nav.error && nav.items.length === 0 && (
@@ -163,10 +178,12 @@ function SingleResults({
 function MultiResults({
   hashes,
   overhead,
+  localeCodes,
   onSelect,
 }: {
   hashes: string[];
   overhead: number;
+  localeCodes: Map<string, string>;
   onSelect: (sample: SampleSummary) => void;
 }) {
   const { theme, isDarkMode } = useThemeStore();
@@ -354,6 +371,7 @@ function MultiResults({
       <SampleTable
         items={pageItems}
         onSelect={onSelect}
+        localeCodes={localeCodes}
         selection={{ selected, onToggle: toggle, onToggleAll: toggleAll, allSelected }}
       />
       {loading && <TableEmptyState>멀티 검색 중...</TableEmptyState>}

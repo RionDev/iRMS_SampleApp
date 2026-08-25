@@ -13,6 +13,8 @@ export interface SampleSummary {
   pool: string | null;
   format: string | null;
   category: string | null;
+  /** 파일 세부 타입 name */
+  spectype: string | null;
   detect_count: number | null;
   total_count: number | null;
   /** 정수 퍼센트 0~100 */

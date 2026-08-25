@@ -222,6 +222,7 @@ function makeSample(id: number): SampleDetail {
   const registerMs = NOW - Math.floor(rand() * 90 * DAY_MS);
   const fileFormat = pick(FORMATS).name;
   const fileCategory = pick(CATEGORIES).name;
+  const fileSpectype = pick(SPECTYPES);
 
   return {
     id,
@@ -231,6 +232,7 @@ function makeSample(id: number): SampleDetail {
     pool: rand() < 0.7 ? 'Black' : 'Gray',
     format: fileFormat,
     category: fileCategory,
+    spectype: fileSpectype,
     detect_count: detectCount,
     total_count: totalCount,
     detect_ratio: detectRatio,
@@ -243,7 +245,7 @@ function makeSample(id: number): SampleDetail {
     type: {
       format: fileFormat,
       category: fileCategory,
-      spectype: pick(SPECTYPES),
+      spectype: fileSpectype,
       compiler: pick(COMPILERS),
       linker: pick(LINKERS),
       library: pick(LIBRARIES),
