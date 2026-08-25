@@ -9,12 +9,6 @@ import type {
   SampleDetail,
   SampleSearchQuery,
   SampleSummary,
-  StatsDaily,
-  StatsDetectionRatio,
-  StatsLocales,
-  StatsSummary,
-  StatsTopDetections,
-  StatsTypes,
 } from '../../types/sample';
 import { detectHashType } from '../../utils/hash';
 import { FILTER_META, SAMPLES, SAMPLES_BY_HASH } from './mockDb';
@@ -77,16 +71,17 @@ function matchesQuery(s: SampleDetail, query: SampleSearchQuery): boolean {
     }
   }
 
-  const pool = nameOf(FILTER_META.pools, query.pool);
-  if (pool && s.pool !== pool) return false;
-  const format = nameOf(FILTER_META.formats, query.format);
-  if (format && s.format !== format) return false;
-  const category = nameOf(FILTER_META.categories, query.category);
-  if (category && s.category !== category) return false;
-  const locale = nameOf(FILTER_META.locales, query.locale);
-  if (locale && s.locale !== locale) return false;
-  const source = nameOf(FILTER_META.sources, query.source);
-  if (source && s.source !== source) return false;
+  // 단일 lookup 필터 — 반복 지정 시 OR (BE in_ 검색과 동일)
+  const inNames = (options: FilterOption[], ids: number[] | undefined, actual: string | null) => {
+    if (!ids || ids.length === 0) return true;
+    const names = ids.map((id) => nameOf(options, id)).filter(Boolean);
+    return actual !== null && names.includes(actual);
+  };
+  if (!inNames(FILTER_META.pools, query.pool, s.pool)) return false;
+  if (!inNames(FILTER_META.formats, query.format, s.format)) return false;
+  if (!inNames(FILTER_META.categories, query.category, s.category)) return false;
+  if (!inNames(FILTER_META.locales, query.locale, s.locale)) return false;
+  if (!inNames(FILTER_META.sources, query.source, s.source)) return false;
 
   for (const tagId of query.tag ?? []) {
     const tag = nameOf(FILTER_META.tags, tagId);
@@ -158,89 +153,6 @@ export async function multiSearch(hashes: string[]): Promise<MultiSearchResult> 
 export async function getFilterMeta(): Promise<FilterMeta> {
   await delay(100);
   return FILTER_META;
-}
-
-function countsBy(values: Array<string | null>): { name: string; count: number }[] {
-  const counts = new Map<string, number>();
-  values.forEach((value) => {
-    const name = value ?? 'Unknown';
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  });
-  return Array.from(counts, ([name, count]) => ({ name, count })).sort(
-    (a, b) => b.count - a.count,
-  );
-}
-
-export async function getStatsSummary(): Promise<StatsSummary> {
-  await delay(120);
-  const now = Date.now();
-  const ratios = SAMPLES.map((s) => s.detect_ratio).filter((v): v is number => v !== null);
-  return {
-    total_samples: SAMPLES.length,
-    last_24h: SAMPLES.filter((s) => now - new Date(s.register_date.replace(' ', 'T')).getTime() <= 86_400_000).length,
-    last_7d: SAMPLES.filter((s) => now - new Date(s.register_date.replace(' ', 'T')).getTime() <= 604_800_000).length,
-    pools: countsBy(SAMPLES.map((s) => s.pool)),
-    avg_detect_ratio: ratios.length
-      ? Math.round((ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length) * 100) / 100
-      : 0,
-  };
-}
-
-export async function getDailyStats(days: number): Promise<StatsDaily> {
-  await delay(120);
-  const counts = new Map<string, number>();
-  SAMPLES.forEach((s) => {
-    const day = s.register_date.slice(0, 10);
-    counts.set(day, (counts.get(day) ?? 0) + 1);
-  });
-  const items = Array.from({ length: days }, (_, offset) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (days - 1 - offset));
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    return { date: key, count: counts.get(key) ?? 0 };
-  });
-  return { days, items };
-}
-
-export async function getTypesStats(): Promise<StatsTypes> {
-  await delay(120);
-  return {
-    formats: countsBy(SAMPLES.map((s) => s.format)),
-    categories: countsBy(SAMPLES.map((s) => s.category)),
-  };
-}
-
-export async function getLocalesStats(limit = 10): Promise<StatsLocales> {
-  await delay(120);
-  return { items: countsBy(SAMPLES.map((s) => s.locale)).slice(0, limit) };
-}
-
-export async function getDetectionRatioStats(): Promise<StatsDetectionRatio> {
-  await delay(120);
-  const counts = Array<number>(10).fill(0);
-  SAMPLES.forEach((s) => {
-    const ratio = s.detect_ratio ?? 0;
-    counts[Math.min(Math.floor(ratio / 10), 9)] += 1;
-  });
-  return {
-    buckets: counts.map((count, i) => ({ range: `${i * 10}-${i * 10 + 10}`, count })),
-  };
-}
-
-export async function getTopDetections(
-  vendorId: number,
-  limit = 20,
-): Promise<StatsTopDetections> {
-  await delay(120);
-  const vendor = FILTER_META.vendors.find((option) => option.id === vendorId)?.name;
-  const names = SAMPLES.flatMap((s) =>
-    s.diagnoses.filter((diagnosis) => !vendor || diagnosis.vendor === vendor).map((d) => d.diagname),
-  );
-  return {
-    vendor_id: vendorId,
-    items: countsBy(names).slice(0, limit).map((item, index) => ({ ...item, diag_id: index + 1 })),
-  };
 }
 
 export async function downloadSample(hash: string): Promise<Blob> {

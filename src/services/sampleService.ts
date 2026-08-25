@@ -9,12 +9,6 @@ import type {
   SampleDetail,
   SampleSearchQuery,
   SampleSummary,
-  StatsDaily,
-  StatsDetectionRatio,
-  StatsLocales,
-  StatsSummary,
-  StatsTopDetections,
-  StatsTypes,
 } from '../types/sample';
 import * as mock from './mock/mockSampleService';
 
@@ -75,47 +69,6 @@ export async function multiSearch(hashes: string[]): Promise<MultiSearchResult> 
 export async function getFilterMeta(): Promise<FilterMeta> {
   if (USE_MOCK) return mock.getFilterMeta();
   const res = await apiClient.get<FilterMeta>('/api/sample/meta/filters');
-  return res.data;
-}
-
-export async function getStatsSummary(): Promise<StatsSummary> {
-  if (USE_MOCK) return mock.getStatsSummary();
-  const res = await apiClient.get<StatsSummary>('/api/sample/stats/summary');
-  return res.data;
-}
-
-export async function getDailyStats(days: number): Promise<StatsDaily> {
-  if (USE_MOCK) return mock.getDailyStats(days);
-  const res = await apiClient.get<StatsDaily>('/api/sample/stats/daily', { params: { days } });
-  return res.data;
-}
-
-export async function getTypesStats(): Promise<StatsTypes> {
-  if (USE_MOCK) return mock.getTypesStats();
-  const res = await apiClient.get<StatsTypes>('/api/sample/stats/types');
-  return res.data;
-}
-
-export async function getLocalesStats(limit = 10): Promise<StatsLocales> {
-  if (USE_MOCK) return mock.getLocalesStats(limit);
-  const res = await apiClient.get<StatsLocales>('/api/sample/stats/locales', { params: { limit } });
-  return res.data;
-}
-
-export async function getDetectionRatioStats(): Promise<StatsDetectionRatio> {
-  if (USE_MOCK) return mock.getDetectionRatioStats();
-  const res = await apiClient.get<StatsDetectionRatio>('/api/sample/stats/detection-ratio');
-  return res.data;
-}
-
-export async function getTopDetections(
-  vendorId: number,
-  limit = 20,
-): Promise<StatsTopDetections> {
-  if (USE_MOCK) return mock.getTopDetections(vendorId, limit);
-  const res = await apiClient.get<StatsTopDetections>('/api/sample/stats/top-detections', {
-    params: { vendor_id: vendorId, limit },
-  });
   return res.data;
 }
 

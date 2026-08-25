@@ -79,11 +79,12 @@ export interface SampleSearchQuery {
   q?: string;
   /** 진단명 검색 매칭 모드 (기본 prefix) */
   match?: MatchMode;
-  pool?: number;
-  locale?: number;
-  source?: number;
-  format?: number;
-  category?: number;
+  /** 단일 lookup 필터 — 반복 지정 시 OR (부분 일치가 여러 id 로 풀릴 수 있음) */
+  pool?: number[];
+  locale?: number[];
+  source?: number[];
+  format?: number[];
+  category?: number[];
   /** 반복 지정 시 AND */
   tag?: number[];
   label?: number[];
@@ -100,6 +101,15 @@ export interface MultiSearchResult {
   unmatched: string[];
 }
 
+/**
+ * 검색바 제출 요청 — 검색어에 유효 해시가 2개 이상이면 멀티 해시 검색으로
+ * 전환된다 (VirusTotal 방식: 별도 화면 없이 같은 검색바에서 처리).
+ * 멀티 모드에서는 상세 필터가 적용되지 않는다.
+ */
+export type SearchRequest =
+  | { mode: 'single'; query: SampleSearchQuery }
+  | { mode: 'multi'; hashes: string[] };
+
 /** 멀티 검색 최대 해시 수 (BE 계약) */
 export const MULTI_SEARCH_MAX = 500;
 /** 배치 다운로드 최대 선택 수 (BE 계약) */
@@ -107,52 +117,3 @@ export const BATCH_DOWNLOAD_MAX = 50;
 /** 배치 다운로드 ZIP 비밀번호 (BE 기본값 — env 로 변경 가능) */
 export const BATCH_ZIP_PASSWORD = 'infected';
 
-export interface NameCount {
-  name: string;
-  count: number;
-}
-
-export interface StatsSummary {
-  total_samples: number;
-  last_24h: number;
-  last_7d: number;
-  pools: NameCount[];
-  avg_detect_ratio: number;
-}
-
-export interface DailyCount {
-  date: string;
-  count: number;
-}
-
-export interface StatsDaily {
-  days: number;
-  items: DailyCount[];
-}
-
-export interface StatsTypes {
-  formats: NameCount[];
-  categories: NameCount[];
-}
-
-export interface StatsLocales {
-  items: NameCount[];
-}
-
-export interface RatioBucket {
-  range: string;
-  count: number;
-}
-
-export interface StatsDetectionRatio {
-  buckets: RatioBucket[];
-}
-
-export interface TopDetectionItem extends NameCount {
-  diag_id: number;
-}
-
-export interface StatsTopDetections {
-  vendor_id: number | null;
-  items: TopDetectionItem[];
-}

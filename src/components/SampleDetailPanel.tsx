@@ -1,44 +1,19 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { AppCenterMessage } from '@common/components/AppCenterMessage';
-import { AppLayout } from '@common/components/AppLayout';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BaseTable, type TableColumn } from '@common/components/BaseTable';
 import { Button } from '@common/components/Button';
 import { SearchInput } from '@common/components/SearchInput';
-import { useAppAccess } from '@common/hooks/useAuth';
 import { useThemeStore } from '@common/stores/themeStore';
-import { CopyButton } from '../components/CopyButton';
-import { DetectionDonut } from '../components/DetectionDonut';
-import { TagBadge } from '../components/TagBadge';
-import { sampleNavItems } from '../navigation';
 import { downloadSample, extractErrorDetail, getSampleDetail } from '../services/sampleService';
 import type { SampleDetail, SampleDiagnosis } from '../types/sample';
 import { formatDate, formatSizeDetailed, saveBlob } from '../utils/format';
-import { isHash } from '../utils/hash';
+import { CopyButton } from './CopyButton';
+import { DetectionDonut } from './DetectionDonut';
+import { TagBadge } from './TagBadge';
 
 const DOWNLOAD_ERROR_LABEL: Record<string, string> = {
   not_stored: '보관 중인 샘플이 아니어서 다운로드할 수 없습니다.',
   fetch_failed: '샘플 저장소에서 파일을 가져오지 못했습니다.',
 };
-
-function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-  const { theme } = useThemeStore();
-  return (
-    <div
-      style={{
-        backgroundColor: theme.colors.surface,
-        border: `1px solid ${theme.colors.border}`,
-        borderRadius: theme.radius.md,
-        boxShadow: theme.shadow.card,
-        padding: '20px 24px',
-        boxSizing: 'border-box',
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 function SectionTitle({ children }: { children: ReactNode }) {
   const { theme } = useThemeStore();
@@ -117,10 +92,16 @@ const TYPE_FIELD_LABELS: [keyof NonNullable<SampleDetail['type']>, string][] = [
   ['resource', '리소스'],
 ];
 
-export function DetailPage() {
-  useAppAccess('/sample');
-  const { hash } = useParams<{ hash: string }>();
-  const navigate = useNavigate();
+interface SampleDetailPanelProps {
+  hash: string;
+  onClose: () => void;
+}
+
+/**
+ * 샘플 상세 패널 — Drawer 내부에서 렌더되는 body-only 컴포넌트 (admin 패턴).
+ * 페이지 이동 없이 열리므로 검색 결과/페이지 상태가 유지된다.
+ */
+export function SampleDetailPanel({ hash, onClose }: SampleDetailPanelProps) {
   const { theme } = useThemeStore();
 
   const [detail, setDetail] = useState<SampleDetail | null>(null);
@@ -135,12 +116,8 @@ export function DetailPage() {
     setLoading(true);
     setNotFound(false);
     setDetail(null);
-
-    if (!hash || !isHash(hash)) {
-      setLoading(false);
-      setNotFound(true);
-      return undefined;
-    }
+    setNotice(null);
+    setDiagFilter('');
 
     getSampleDetail(hash)
       .then((d) => {
@@ -203,97 +180,86 @@ export function DetailPage() {
     }
   };
 
+  const centerStyle = {
+    padding: '48px 0',
+    textAlign: 'center' as const,
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.base,
+  };
+
   return (
-    <AppLayout
-      title="샘플 상세"
-      appName="샘플"
-      sidebarItems={sampleNavItems}
-      version={__APP_VERSION__}
-      contentMaxWidth="1700px"
-    >
-      {loading && <AppCenterMessage>로딩 중...</AppCenterMessage>}
-      {!loading && notFound && (
-        <AppCenterMessage>
-          샘플을 찾을 수 없습니다.
-          <div style={{ marginTop: '16px', textAlign: 'center' }}>
-            <Button variant="secondary" onClick={() => navigate('/')}>
-              검색으로 돌아가기
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px 24px' }}>
+      {/* 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontSize: theme.fontSize.lg, fontWeight: 700, color: theme.colors.text }}>
+          샘플 상세
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {notice && (
+            <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.danger }}>
+              {notice}
+            </span>
+          )}
+          {detail && (
+            <Button
+              onClick={handleDownload}
+              disabled={!detail.downloadable || downloading}
+              title={
+                detail.downloadable
+                  ? '샘플 파일 다운로드'
+                  : '보관 중인 샘플이 아니어서 다운로드할 수 없습니다.'
+              }
+            >
+              {downloading ? '다운로드 중...' : '다운로드'}
             </Button>
-          </div>
-        </AppCenterMessage>
-      )}
+          )}
+          <Button variant="secondary" onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+      </div>
+
+      {loading && <div style={centerStyle}>로딩 중...</div>}
+      {!loading && notFound && <div style={centerStyle}>샘플을 찾을 수 없습니다.</div>}
+
       {!loading && detail && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
-            <Card style={{ flex: 2, minWidth: 0 }}>
-              <div style={{ display: 'flex', gap: '24px' }}>
-                <DetectionDonut
-                  detectCount={detail.detect_count ?? 0}
-                  totalCount={detail.total_count ?? 0}
-                  size={132}
-                />
-                <div
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                  }}
-                >
-                  <HashRow label="SHA256" value={detail.sha256} />
-                  <HashRow label="MD5" value={detail.md5} />
-                  <HashRow label="SSDEEP" value={detail.ssdeep} />
-                  <InfoRow label="크기">{formatSizeDetailed(detail.file_size)}</InfoRow>
-                  <InfoRow label="포맷 / 분류">
-                    {detail.format ?? '-'} · {detail.category ?? '-'}
-                  </InfoRow>
-                  <InfoRow label="풀 / 로케일">
-                    {detail.pool ?? '-'} · {detail.locale ?? '-'}
-                  </InfoRow>
-                  <InfoRow label="수집 소스">{detail.source ?? '-'}</InfoRow>
-                  <InfoRow label="등록일">{formatDate(detail.register_date)}</InfoRow>
-                  <InfoRow label="보관 상태">{detail.storage_status ?? '-'}</InfoRow>
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    alignItems: 'stretch',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Button
-                    onClick={handleDownload}
-                    disabled={!detail.downloadable || downloading}
-                    title={
-                      detail.downloadable
-                        ? '샘플 파일 다운로드'
-                        : '보관 중인 샘플이 아니어서 다운로드할 수 없습니다.'
-                    }
-                  >
-                    {downloading ? '다운로드 중...' : '다운로드'}
-                  </Button>
-                  <Button variant="secondary" onClick={() => navigate(-1)}>
-                    뒤로
-                  </Button>
-                  {notice && (
-                    <span
-                      style={{
-                        maxWidth: '180px',
-                        fontSize: theme.fontSize.sm,
-                        color: theme.colors.danger,
-                        whiteSpace: 'normal',
-                      }}
-                    >
-                      {notice}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </Card>
-            <Card style={{ flex: 1, minWidth: '300px' }}>
+        <>
+          {/* 진단 요약 + 핵심 정보 */}
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <DetectionDonut
+              detectCount={detail.detect_count ?? 0}
+              totalCount={detail.total_count ?? 0}
+              size={132}
+            />
+            <div
+              style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}
+            >
+              <HashRow label="SHA256" value={detail.sha256} />
+              <HashRow label="MD5" value={detail.md5} />
+              <HashRow label="SSDEEP" value={detail.ssdeep} />
+              <InfoRow label="크기">{formatSizeDetailed(detail.file_size)}</InfoRow>
+              <InfoRow label="포맷 / 분류">
+                {detail.format ?? '-'} · {detail.category ?? '-'}
+              </InfoRow>
+              <InfoRow label="풀 / 로케일">
+                {detail.pool ?? '-'} · {detail.locale ?? '-'}
+              </InfoRow>
+              <InfoRow label="수집 소스">{detail.source ?? '-'}</InfoRow>
+              <InfoRow label="등록일">{formatDate(detail.register_date)}</InfoRow>
+              <InfoRow label="보관 상태">{detail.storage_status ?? '-'}</InfoRow>
+            </div>
+          </div>
+
+          {/* 파일 타입 상세 + 태그/라벨 */}
+          <div
+            style={{
+              borderTop: `1px solid ${theme.colors.border}`,
+              paddingTop: '16px',
+              display: 'flex',
+              gap: '32px',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
               <SectionTitle>파일 타입 상세</SectionTitle>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {TYPE_FIELD_LABELS.map(([field, label]) => (
@@ -304,27 +270,29 @@ export function DetailPage() {
                   </InfoRow>
                 ))}
               </div>
-              <div style={{ marginTop: '16px' }}>
-                <SectionTitle>태그 / 라벨</SectionTitle>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {detail.tags.map((tag) => (
-                    <TagBadge key={`t-${tag}`}>{tag}</TagBadge>
-                  ))}
-                  {detail.labels.map((label) => (
-                    <TagBadge key={`l-${label}`} variant="label">
-                      {label}
-                    </TagBadge>
-                  ))}
-                  {detail.tags.length === 0 && detail.labels.length === 0 && (
-                    <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
-                      태그/라벨 없음
-                    </span>
-                  )}
-                </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <SectionTitle>태그 / 라벨</SectionTitle>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {detail.tags.map((tag) => (
+                  <TagBadge key={`t-${tag}`}>{tag}</TagBadge>
+                ))}
+                {detail.labels.map((label) => (
+                  <TagBadge key={`l-${label}`} variant="label">
+                    {label}
+                  </TagBadge>
+                ))}
+                {detail.tags.length === 0 && detail.labels.length === 0 && (
+                  <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
+                    태그/라벨 없음
+                  </span>
+                )}
               </div>
-            </Card>
+            </div>
           </div>
-          <Card>
+
+          {/* 벤더별 진단명 */}
+          <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '16px' }}>
             <div
               style={{
                 display: 'flex',
@@ -333,9 +301,7 @@ export function DetailPage() {
                 marginBottom: '12px',
               }}
             >
-              <SectionTitle>
-                벤더별 진단명 ({detail.diagnoses.length}개 벤더 진단)
-              </SectionTitle>
+              <SectionTitle>벤더별 진단명 ({detail.diagnoses.length}개 벤더 진단)</SectionTitle>
               <SearchInput
                 value={diagFilter}
                 onChange={(e) => setDiagFilter(e.target.value)}
@@ -350,22 +316,15 @@ export function DetailPage() {
                 rowKey={(d) => `${d.vendor}-${d.diagname}`}
               />
             ) : (
-              <div
-                style={{
-                  padding: '24px 0',
-                  textAlign: 'center',
-                  color: theme.colors.textMuted,
-                  fontSize: theme.fontSize.base,
-                }}
-              >
+              <div style={centerStyle}>
                 {detail.diagnoses.length === 0
                   ? '진단한 벤더가 없습니다.'
                   : '필터와 일치하는 진단이 없습니다.'}
               </div>
             )}
-          </Card>
-        </div>
+          </div>
+        </>
       )}
-    </AppLayout>
+    </div>
   );
 }
