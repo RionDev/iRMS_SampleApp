@@ -395,7 +395,7 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
                 title={allOn ? `${group} 전체 해제` : `${group} 전체 선택`}
                 style={{
                   flexShrink: 0,
-                  width: '52px',
+                  width: '68px',
                   padding: '3px 0',
                   fontSize: theme.fontSize.sm,
                   fontWeight: 700,
