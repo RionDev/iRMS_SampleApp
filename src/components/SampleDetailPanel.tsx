@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { BaseTable, type TableColumn } from '@common/components/BaseTable';
 import { Button } from '@common/components/Button';
-import { SearchInput } from '@common/components/SearchInput';
 import { useThemeStore } from '@common/stores/themeStore';
 import { downloadSample, extractErrorDetail, getSampleDetail } from '../services/sampleService';
-import type { SampleDetail, SampleDiagnosis } from '../types/sample';
-import { formatDate, formatSizeDetailed, saveBlob } from '../utils/format';
+import type { SampleDetail } from '../types/sample';
+import { formatDate, formatSizeDetailed, saveBlob, storageStatusLabel } from '../utils/format';
 import { CopyButton } from './CopyButton';
 import { DetectionDonut } from './DetectionDonut';
 import { TagBadge } from './TagBadge';
@@ -32,16 +30,38 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-function InfoRow({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
-  const { theme } = useThemeStore();
+function InfoRow({
+  label,
+  children,
+  mono,
+  nowrap,
+}: {
+  label: string;
+  children: ReactNode;
+  mono?: boolean;
+  /** 값을 한 줄로 유지하고 넘치면 가로 스크롤 (해시 등) */
+  nowrap?: boolean;
+}) {
+  const { theme, isDarkMode } = useThemeStore();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minHeight: '28px' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        minHeight: '30px',
+        padding: '3px 10px',
+        borderRadius: theme.radius.sm,
+        backgroundColor: isDarkMode ? theme.colors.pageBackground : theme.colors.surfaceMuted,
+      }}
+    >
       <span
         style={{
-          width: '92px',
+          width: '72px',
           flexShrink: 0,
           fontSize: theme.fontSize.sm,
-          color: theme.colors.textMuted,
+          fontWeight: 700,
+          color: theme.colors.text,
         }}
       >
         {label}
@@ -55,8 +75,9 @@ function InfoRow({ label, children, mono }: { label: string; children: ReactNode
           fontSize: theme.fontSize.base,
           color: theme.colors.text,
           fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
-          wordBreak: 'break-all',
-          whiteSpace: 'normal',
+          wordBreak: nowrap ? 'normal' : 'break-all',
+          whiteSpace: nowrap ? 'nowrap' : 'normal',
+          overflowX: nowrap ? 'auto' : undefined,
         }}
       >
         {children}
@@ -75,7 +96,7 @@ function HashRow({ label, value }: { label: string; value: string | null }) {
     );
   }
   return (
-    <InfoRow label={label} mono>
+    <InfoRow label={label} mono nowrap>
       {value}
       <CopyButton text={value} />
     </InfoRow>
@@ -94,6 +115,8 @@ const TYPE_FIELD_LABELS: [keyof NonNullable<SampleDetail['type']>, string][] = [
 
 interface SampleDetailPanelProps {
   hash: string;
+  /** 전체 벤더명 (meta/filters) — 미진단 벤더까지 진단명 표에 노출하기 위함 */
+  vendorNames: string[];
   onClose: () => void;
 }
 
@@ -101,15 +124,14 @@ interface SampleDetailPanelProps {
  * 샘플 상세 패널 — Drawer 내부에서 렌더되는 body-only 컴포넌트 (admin 패턴).
  * 페이지 이동 없이 열리므로 검색 결과/페이지 상태가 유지된다.
  */
-export function SampleDetailPanel({ hash, onClose }: SampleDetailPanelProps) {
-  const { theme } = useThemeStore();
+export function SampleDetailPanel({ hash, vendorNames, onClose }: SampleDetailPanelProps) {
+  const { theme, isDarkMode } = useThemeStore();
 
   const [detail, setDetail] = useState<SampleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [diagFilter, setDiagFilter] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -117,7 +139,6 @@ export function SampleDetailPanel({ hash, onClose }: SampleDetailPanelProps) {
     setNotFound(false);
     setDetail(null);
     setNotice(null);
-    setDiagFilter('');
 
     getSampleDetail(hash)
       .then((d) => {
@@ -135,33 +156,15 @@ export function SampleDetailPanel({ hash, onClose }: SampleDetailPanelProps) {
     };
   }, [hash]);
 
-  const filteredDiagnoses = useMemo(() => {
-    if (!detail) return [];
-    const needle = diagFilter.trim().toLowerCase();
-    const rows = needle
-      ? detail.diagnoses.filter(
-          (d) =>
-            d.vendor.toLowerCase().includes(needle) ||
-            d.diagname.toLowerCase().includes(needle),
-        )
-      : detail.diagnoses;
-    return [...rows].sort((a, b) => a.vendor.localeCompare(b.vendor));
-  }, [detail, diagFilter]);
-
-  const diagColumns = useMemo<TableColumn<SampleDiagnosis>[]>(
-    () => [
-      { key: 'vendor', label: '벤더', cellStyle: { width: '180px' } },
-      {
-        key: 'diagname',
-        label: '진단명',
-        cellStyle: { textAlign: 'left' },
-        render: (d) => (
-          <span style={{ color: theme.colors.danger, fontWeight: 600 }}>{d.diagname}</span>
-        ),
-      },
-    ],
-    [theme],
-  );
+  // 전체 벤더(meta) + 진단명 있는 벤더 합집합 — 미진단 벤더도 노출한다
+  const vendorRows = useMemo(() => {
+    const diagByVendor = new Map(detail?.diagnoses.map((d) => [d.vendor, d.diagname]) ?? []);
+    const all = new Set<string>(vendorNames);
+    diagByVendor.forEach((_, vendor) => all.add(vendor));
+    return [...all]
+      .sort((a, b) => a.localeCompare(b))
+      .map((vendor) => ({ vendor, diagname: diagByVendor.get(vendor) ?? null }));
+  }, [detail, vendorNames]);
 
   const handleDownload = async () => {
     if (!detail || !detail.downloadable || downloading) return;
@@ -226,101 +229,161 @@ export function SampleDetailPanel({ hash, onClose }: SampleDetailPanelProps) {
         <>
           {/* 진단 요약 + 핵심 정보 */}
           <div style={{ display: 'flex', gap: '24px' }}>
-            <DetectionDonut
-              detectCount={detail.detect_count ?? 0}
-              totalCount={detail.total_count ?? 0}
-              size={132}
-            />
+            {/* 왼쪽: 도넛 + 태그/라벨 */}
             <div
-              style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}
+              style={{
+                flexShrink: 0,
+                width: '180px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px',
+              }}
+            >
+              <DetectionDonut
+                detectCount={detail.detect_count ?? 0}
+                totalCount={detail.total_count ?? 0}
+                size={168}
+              />
+              <div style={{ width: '100%' }}>
+                <SectionTitle>태그 / 라벨</SectionTitle>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* 태그 한 줄 */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {detail.tags.length > 0 ? (
+                      detail.tags.map((tag) => (
+                        <TagBadge key={`t-${tag}`} size="md">
+                          {tag}
+                        </TagBadge>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
+                        태그 없음
+                      </span>
+                    )}
+                  </div>
+                  {/* 라벨 한 줄 */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {detail.labels.length > 0 ? (
+                      detail.labels.map((label) => (
+                        <TagBadge key={`l-${label}`} variant="label" size="md">
+                          {label}
+                        </TagBadge>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
+                        라벨 없음
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* 오른쪽: 해시(전체폭) + 정보 2열 그리드 */}
+            <div
+              style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}
             >
               <HashRow label="SHA256" value={detail.sha256} />
               <HashRow label="MD5" value={detail.md5} />
               <HashRow label="SSDEEP" value={detail.ssdeep} />
-              <InfoRow label="크기">{formatSizeDetailed(detail.file_size)}</InfoRow>
-              <InfoRow label="포맷 / 분류">
-                {detail.format ?? '-'} · {detail.category ?? '-'}
-              </InfoRow>
-              <InfoRow label="풀 / 로케일">
-                {detail.pool ?? '-'} · {detail.locale ?? '-'}
-              </InfoRow>
-              <InfoRow label="수집 소스">{detail.source ?? '-'}</InfoRow>
-              <InfoRow label="등록일">{formatDate(detail.register_date)}</InfoRow>
-              <InfoRow label="보관 상태">{detail.storage_status ?? '-'}</InfoRow>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '4px',
+                }}
+              >
+                <InfoRow label="크기">{formatSizeDetailed(detail.file_size)}</InfoRow>
+                <InfoRow label="포맷 / 분류">
+                  {detail.format ?? '-'} · {detail.category ?? '-'}
+                </InfoRow>
+                <InfoRow label="풀">{detail.pool ?? '-'}</InfoRow>
+                <InfoRow label="로케일">{detail.locale ?? '-'}</InfoRow>
+                <InfoRow label="수집 소스">{detail.source ?? '-'}</InfoRow>
+                <InfoRow label="등록일">{formatDate(detail.register_date)}</InfoRow>
+                <InfoRow label="보관 상태">{storageStatusLabel(detail.storage_status)}</InfoRow>
+              </div>
             </div>
           </div>
 
-          {/* 파일 타입 상세 + 태그/라벨 */}
+          {/* 파일 타입 상세 */}
           <div
             style={{
               borderTop: `1px solid ${theme.colors.border}`,
               paddingTop: '16px',
-              display: 'flex',
-              gap: '32px',
             }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <SectionTitle>파일 타입 상세</SectionTitle>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {TYPE_FIELD_LABELS.map(([field, label]) => (
-                  <InfoRow key={field} label={label}>
-                    {detail.type?.[field] ?? (
-                      <span style={{ color: theme.colors.textMuted }}>-</span>
-                    )}
-                  </InfoRow>
-                ))}
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <SectionTitle>태그 / 라벨</SectionTitle>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {detail.tags.map((tag) => (
-                  <TagBadge key={`t-${tag}`}>{tag}</TagBadge>
-                ))}
-                {detail.labels.map((label) => (
-                  <TagBadge key={`l-${label}`} variant="label">
-                    {label}
-                  </TagBadge>
-                ))}
-                {detail.tags.length === 0 && detail.labels.length === 0 && (
-                  <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
-                    태그/라벨 없음
-                  </span>
-                )}
-              </div>
+            <SectionTitle>파일 타입 상세</SectionTitle>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '4px',
+              }}
+            >
+              {TYPE_FIELD_LABELS.map(([field, label]) => (
+                <InfoRow key={field} label={label}>
+                  {detail.type?.[field] ?? (
+                    <span style={{ color: theme.colors.textMuted }}>-</span>
+                  )}
+                </InfoRow>
+              ))}
             </div>
           </div>
 
-          {/* 벤더별 진단명 */}
+          {/* 벤더별 진단명 — 전체 벤더 2열 (미진단 포함) */}
           <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '16px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '12px',
-              }}
-            >
-              <SectionTitle>벤더별 진단명 ({detail.diagnoses.length}개 벤더 진단)</SectionTitle>
-              <SearchInput
-                value={diagFilter}
-                onChange={(e) => setDiagFilter(e.target.value)}
-                placeholder="벤더/진단명 필터"
-                style={{ width: '220px' }}
-              />
-            </div>
-            {filteredDiagnoses.length > 0 ? (
-              <BaseTable
-                items={filteredDiagnoses}
-                columns={diagColumns}
-                rowKey={(d) => `${d.vendor}-${d.diagname}`}
-              />
-            ) : (
-              <div style={centerStyle}>
-                {detail.diagnoses.length === 0
-                  ? '진단한 벤더가 없습니다.'
-                  : '필터와 일치하는 진단이 없습니다.'}
+            <SectionTitle>
+              벤더별 진단명 ({detail.diagnoses.length}/{vendorRows.length} 진단)
+            </SectionTitle>
+            {vendorRows.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {vendorRows.map(({ vendor, diagname }) => (
+                  <div
+                    key={vendor}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      minHeight: '30px',
+                      padding: '3px 10px',
+                      borderRadius: theme.radius.sm,
+                      backgroundColor: isDarkMode
+                        ? theme.colors.pageBackground
+                        : theme.colors.surfaceMuted,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '110px',
+                        flexShrink: 0,
+                        fontSize: theme.fontSize.sm,
+                        fontWeight: 700,
+                        color: theme.colors.text,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                      title={vendor}
+                    >
+                      {vendor}
+                    </span>
+                    <span
+                      style={{
+                        minWidth: 0,
+                        fontSize: theme.fontSize.base,
+                        fontWeight: diagname ? 600 : 400,
+                        color: diagname ? theme.colors.danger : theme.colors.textMuted,
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {diagname ?? '미진단'}
+                    </span>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <div style={centerStyle}>벤더 정보가 없습니다.</div>
             )}
           </div>
         </>

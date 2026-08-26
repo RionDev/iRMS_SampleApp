@@ -59,3 +59,14 @@ export function flagEmoji(code: string): string | null {
     ...[...code.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65),
   );
 }
+
+/** 보관 상태 name(Stored/Moved/None) → 한글 표시 (그 외 값은 원문 유지) */
+export function storageStatusLabel(status: string | null): string {
+  if (!status) return '-';
+  const map: Record<string, string> = {
+    Stored: '보관중',
+    Moved: '이동됨',
+    None: '미보관',
+  };
+  return map[status] ?? status;
+}

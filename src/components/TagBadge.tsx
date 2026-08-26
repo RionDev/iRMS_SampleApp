@@ -5,14 +5,21 @@ interface TagBadgeProps {
   children: ReactNode;
   /** tag = 파랑 계열, label = 보라(accent) 계열 */
   variant?: 'tag' | 'label';
+  /** sm = 테이블용(기본, 작게), md = 상세 패널용(크게) */
+  size?: 'sm' | 'md';
   /** 지정 시 클릭 가능 뱃지 (예: 해당 태그로 검색) */
   onClick?: () => void;
   title?: string;
 }
 
 /** 태그/라벨 표시용 pill 뱃지 */
-export function TagBadge({ children, variant = 'tag', onClick, title }: TagBadgeProps) {
+export function TagBadge({ children, variant = 'tag', size = 'sm', onClick, title }: TagBadgeProps) {
   const { theme, isDarkMode } = useThemeStore();
+
+  const sizeStyle =
+    size === 'md'
+      ? { padding: '3px 12px', fontSize: theme.fontSize.sm, lineHeight: '20px' }
+      : { padding: '1px 8px', fontSize: theme.fontSize.xs, lineHeight: '16px' };
 
   // theme.md 의 미토큰 색상 (primary-soft / accent)
   const palette =
@@ -41,16 +48,14 @@ export function TagBadge({ children, variant = 'tag', onClick, title }: TagBadge
       }
       style={{
         display: 'inline-block',
-        padding: '1px 8px',
         borderRadius: '999px',
-        fontSize: theme.fontSize.xs,
         fontWeight: 600,
-        lineHeight: '16px',
         backgroundColor: palette.bg,
         border: `1px solid ${palette.border}`,
         color: palette.text,
         whiteSpace: 'nowrap',
         cursor: onClick ? 'pointer' : undefined,
+        ...sizeStyle,
       }}
     >
       {children}

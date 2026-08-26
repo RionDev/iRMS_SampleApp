@@ -125,9 +125,13 @@ export function SearchPage() {
           onTagClick={handleTagClick}
         />
       )}
-      <Drawer isOpen={detailHash !== null} onClose={() => setDetailHash(null)} width="880px">
+      <Drawer isOpen={detailHash !== null} onClose={() => setDetailHash(null)} width="min(1120px, 96vw)">
         {detailHash && (
-          <SampleDetailPanel hash={detailHash} onClose={() => setDetailHash(null)} />
+          <SampleDetailPanel
+            hash={detailHash}
+            vendorNames={(meta?.vendors ?? []).map((v) => v.name)}
+            onClose={() => setDetailHash(null)}
+          />
         )}
       </Drawer>
     </AppLayout>

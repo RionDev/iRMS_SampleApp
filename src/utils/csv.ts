@@ -1,6 +1,7 @@
 // 선택 샘플 CSV 내보내기 — 클라이언트에서 SampleSummary 목록을 직렬화한다.
 
 import type { SampleSummary } from '../types/sample';
+import { storageStatusLabel } from './format';
 
 /** CSV 컬럼 그룹 (내보내기 모달에서 섹션으로 묶어 표시) */
 export type CsvGroup = '기본 정보' | '파일 타입' | '진단' | '분류' | '메타';
@@ -41,7 +42,7 @@ export const CSV_COLUMNS: CsvColumnDef[] = [
   { key: 'tags', label: '태그', group: '메타', get: (s) => s.tags.join(';') },
   { key: 'labels', label: '라벨', group: '메타', get: (s) => s.labels.join(';') },
   { key: 'register_date', label: '등록일', group: '메타', get: (s) => s.register_date },
-  { key: 'storage_status', label: '보관 상태', group: '메타', get: (s) => s.storage_status },
+  { key: 'storage_status', label: '보관 상태', group: '메타', get: (s) => storageStatusLabel(s.storage_status) },
 ];
 
 /** 표시 순서를 유지한 그룹 목록 */
