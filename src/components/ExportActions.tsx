@@ -3,14 +3,14 @@ import { Button } from '@common/components/Button';
 import { Modal } from '@common/components/Modal';
 import { SearchInput } from '@common/components/SearchInput';
 import { useThemeStore } from '@common/stores/themeStore';
-import { batchDownload, extractErrorDetail } from '../services/sampleService';
+import { batchDownload, extractErrorDetail, getDiagnosesMap } from '../services/sampleService';
 import type { SampleSummary } from '../types/sample';
 import {
   BATCH_DOWNLOAD_MAX,
   BATCH_DOWNLOAD_MAX_BYTES,
   BATCH_ZIP_PASSWORD,
 } from '../types/sample';
-import { CSV_COLUMNS, samplesToCsv } from '../utils/csv';
+import { CSV_COLUMNS, CSV_GROUPS, needsDiagnoses, samplesToCsv } from '../utils/csv';
 import { formatSize, saveBlob } from '../utils/format';
 import { sampleKey } from './SampleTable';
 
@@ -306,14 +306,22 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
     try {
       const items =
         scope === 'selected' ? selected : scope === 'list' ? listItems : await all!.fetchAll();
+      const keyList = Array.from(keys);
+      // 진단명 컬럼이 있으면 대상 해시로 벌크 조회 (목록엔 없는 데이터)
+      let diagnosesMap: Record<string, string> | undefined;
+      if (needsDiagnoses(keyList)) {
+        diagnosesMap = await getDiagnosesMap(items.map(sampleKey));
+      }
       const name = `${filename.trim() || 'samples'}.csv`;
       saveBlob(
-        new Blob([samplesToCsv(items, Array.from(keys))], { type: 'text/csv;charset=utf-8' }),
+        new Blob([samplesToCsv(items, keyList, diagnosesMap)], {
+          type: 'text/csv;charset=utf-8',
+        }),
         name,
       );
       onClose();
     } catch {
-      setNotice('검색 전체 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      setNotice('데이터 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.');
       setBusy(false);
     }
   };
@@ -368,19 +376,56 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
           {allChecked ? '전체 해제' : '전체 선택'}
         </button>
       </FieldLabel>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-        {CSV_COLUMNS.map((c) => {
-          const active = keys.has(c.key);
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {CSV_GROUPS.map((group) => {
+          const cols = CSV_COLUMNS.filter((c) => c.group === group);
+          const groupKeys = cols.map((c) => c.key);
+          const allOn = groupKeys.every((k) => keys.has(k));
           return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => toggleKey(c.key)}
-              aria-pressed={active}
-              style={chipStyle(active)}
-            >
-              {c.label}
-            </button>
+            <div key={group} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() =>
+                  setKeys((prev) => {
+                    const next = new Set(prev);
+                    groupKeys.forEach((k) => (allOn ? next.delete(k) : next.add(k)));
+                    return next;
+                  })
+                }
+                title={allOn ? `${group} 전체 해제` : `${group} 전체 선택`}
+                style={{
+                  flexShrink: 0,
+                  width: '52px',
+                  padding: '3px 0',
+                  fontSize: theme.fontSize.sm,
+                  fontWeight: 700,
+                  color: allOn ? theme.colors.primary : theme.colors.textMuted,
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: theme.fontFamily,
+                }}
+              >
+                {group}
+              </button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', flex: 1 }}>
+                {cols.map((c) => {
+                  const active = keys.has(c.key);
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => toggleKey(c.key)}
+                      aria-pressed={active}
+                      style={chipStyle(active)}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>

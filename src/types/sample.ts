@@ -9,12 +9,20 @@ export interface SampleSummary {
   /** DB 스키마상 NULL 허용 (md5 가 필수 UNIQUE 키) */
   sha256: string | null;
   md5: string;
+  /** bs:chunk1:chunk2 조합 문자열, 없으면 null */
+  ssdeep: string | null;
   file_size: number;
   pool: string | null;
   format: string | null;
   category: string | null;
-  /** 파일 세부 타입 name */
+  /** 파일 타입 세부 (전부 name 해석, 값 없으면 null) */
   spectype: string | null;
+  compiler: string | null;
+  linker: string | null;
+  library: string | null;
+  crypter: string | null;
+  overlay: string | null;
+  resource: string | null;
   detect_count: number | null;
   total_count: number | null;
   /** 정수 퍼센트 0~100 */
@@ -22,6 +30,7 @@ export interface SampleSummary {
   locale: string | null;
   source: string | null;
   tags: string[];
+  labels: string[];
   register_date: string;
   storage_status: string | null;
 }
@@ -45,10 +54,8 @@ export interface SampleDiagnosis {
 }
 
 export interface SampleDetail extends SampleSummary {
-  labels: string[];
+  /** 화면용 중첩 타입 객체 (세부 name 은 SampleSummary 에도 평면으로 포함) */
   type: SampleTypeDetail | null;
-  /** bs:chunk1:chunk2 조합 문자열, 없으면 null */
-  ssdeep: string | null;
   /** 미진단 벤더 제외 */
   diagnoses: SampleDiagnosis[];
   /** storage 상태 기반 다운로드 가능 여부 */

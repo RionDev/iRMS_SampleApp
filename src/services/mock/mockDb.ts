@@ -222,41 +222,46 @@ function makeSample(id: number): SampleDetail {
   const registerMs = NOW - Math.floor(rand() * 90 * DAY_MS);
   const fileFormat = pick(FORMATS).name;
   const fileCategory = pick(CATEGORIES).name;
-  const fileSpectype = pick(SPECTYPES);
+  const type = {
+    format: fileFormat,
+    category: fileCategory,
+    spectype: pick(SPECTYPES),
+    compiler: pick(COMPILERS),
+    linker: pick(LINKERS),
+    library: pick(LIBRARIES),
+    crypter: pick(CRYPTERS),
+    overlay: pick(OVERLAYS),
+    resource: pick(RESOURCES),
+  };
+  const ssdeep =
+    rand() < 0.8 ? `${3 * (1 << randInt(4, 12))}:${randHex(24)}:${randHex(12)}` : null;
 
   return {
     id,
     sha256: rand() < 0.97 ? randHex(64) : null,
     md5: randHex(32),
+    ssdeep,
     file_size: randInt(4 * 1024, 48 * 1024 * 1024),
     pool: rand() < 0.7 ? 'Black' : 'Gray',
     format: fileFormat,
     category: fileCategory,
-    spectype: fileSpectype,
+    spectype: type.spectype,
+    compiler: type.compiler,
+    linker: type.linker,
+    library: type.library,
+    crypter: type.crypter,
+    overlay: type.overlay,
+    resource: type.resource,
     detect_count: detectCount,
     total_count: totalCount,
     detect_ratio: detectRatio,
     locale: pick(LOCALES).name,
     source: pick(SOURCES).name,
     tags,
+    labels,
     register_date: formatDateTime(registerMs),
     storage_status: storageStatus,
-    labels,
-    type: {
-      format: fileFormat,
-      category: fileCategory,
-      spectype: fileSpectype,
-      compiler: pick(COMPILERS),
-      linker: pick(LINKERS),
-      library: pick(LIBRARIES),
-      crypter: pick(CRYPTERS),
-      overlay: pick(OVERLAYS),
-      resource: pick(RESOURCES),
-    },
-    ssdeep:
-      rand() < 0.8
-        ? `${3 * (1 << randInt(4, 12))}:${randHex(24)}:${randHex(12)}`
-        : null,
+    type,
     diagnoses,
     downloadable: storageStatus === 'Stored',
   };

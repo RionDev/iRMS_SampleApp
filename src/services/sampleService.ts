@@ -72,6 +72,16 @@ export async function multiSearch(hashes: string[]): Promise<MultiSearchResult> 
   return res.data;
 }
 
+/** 진단명 벌크 조회 (CSV 내보내기 전용) — 해시 → "벤더=진단명;..." (진단명 없으면 생략) */
+export async function getDiagnosesMap(hashes: string[]): Promise<Record<string, string>> {
+  if (USE_MOCK) return mock.getDiagnosesMap(hashes);
+  const res = await apiClient.post<{ diagnoses: Record<string, string> }>(
+    '/api/sample/samples/diagnoses',
+    { hashes },
+  );
+  return res.data.diagnoses;
+}
+
 /** 필터 옵션 사전 일괄 조회 (id+name 쌍) — 화면 진입 시 1회 */
 export async function getFilterMeta(): Promise<FilterMeta> {
   if (USE_MOCK) return mock.getFilterMeta();

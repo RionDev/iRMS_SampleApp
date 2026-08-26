@@ -6,17 +6,25 @@ const SAMPLE: SampleSummary = {
   id: 1,
   sha256: 'a'.repeat(64),
   md5: 'b'.repeat(32),
+  ssdeep: '3072:abc:def',
   file_size: 1024,
   pool: 'Black',
   format: 'PE32',
   category: 'Format',
   spectype: 'NSIS, "Archive"',
+  compiler: 'GCC',
+  linker: null,
+  library: null,
+  crypter: 'UPX',
+  overlay: null,
+  resource: null,
   detect_count: 10,
   total_count: 60,
   detect_ratio: 17,
   locale: 'Republic of Korea',
   source: null,
   tags: ['apt', 'stealer'],
+  labels: ['trojan'],
   register_date: '2026-08-01 10:00:00',
   storage_status: 'Stored',
 };
@@ -38,5 +46,14 @@ describe('samplesToCsv', () => {
     const [header, row] = csv.slice(1).split('\r\n');
     expect(header).toBe('SHA256,MD5,풀');
     expect(row).toBe(`${'a'.repeat(64)},${'b'.repeat(32)},Black`);
+  });
+
+  it('진단명 컬럼은 diagnosesMap[sampleKey] 에서 채운다', () => {
+    const map = { [SAMPLE.sha256!]: 'AhnLab=Trojan,X;Kaspersky=Y' };
+    const csv = samplesToCsv([SAMPLE], ['md5', 'diagnoses'], map);
+    const [header, row] = csv.slice(1).split('\r\n');
+    expect(header).toBe('MD5,벤더별 진단명');
+    // 쉼표 포함 값이라 따옴표로 감싼다
+    expect(row).toBe(`${'b'.repeat(32)},"AhnLab=Trojan,X;Kaspersky=Y"`);
   });
 });

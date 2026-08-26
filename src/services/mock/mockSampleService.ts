@@ -34,8 +34,9 @@ function nameOf(options: FilterOption[], id: number | undefined): string | undef
 }
 
 function toSummary(s: SampleDetail): SampleSummary {
-  const { labels, type, ssdeep, diagnoses, downloadable, ...summary } = s;
-  void labels; void type; void ssdeep; void diagnoses; void downloadable;
+  // 상세 전용 필드(중첩 type/진단명/다운로드 여부)만 제거 — labels/ssdeep/타입 세부는 Summary 에 포함
+  const { type, diagnoses, downloadable, ...summary } = s;
+  void type; void diagnoses; void downloadable;
   return summary;
 }
 
@@ -155,6 +156,17 @@ export async function multiSearch(hashes: string[]): Promise<MultiSearchResult> 
     else unmatched.push(hash);
   }
   return { matched, unmatched };
+}
+
+export async function getDiagnosesMap(hashes: string[]): Promise<Record<string, string>> {
+  await delay(150);
+  const out: Record<string, string> = {};
+  for (const hash of hashes) {
+    const sample = SAMPLES_BY_HASH.get(hash.toLowerCase());
+    if (!sample || sample.diagnoses.length === 0) continue;
+    out[hash] = sample.diagnoses.map((d) => `${d.vendor}=${d.diagname}`).join(';');
+  }
+  return out;
 }
 
 export async function getFilterMeta(): Promise<FilterMeta> {
