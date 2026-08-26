@@ -27,6 +27,8 @@ interface SampleTableProps {
   selection?: SampleSelection;
   /** 로케일 국명 → 알파-2 코드 (meta/filters 기반) — 국기 표시에 사용 */
   localeCodes?: Map<string, string>;
+  /** 태그 뱃지 클릭 → 해당 태그로 검색 */
+  onTagClick?: (tag: string) => void;
 }
 
 export function sampleKey(sample: SampleSummary): string {
@@ -35,7 +37,13 @@ export function sampleKey(sample: SampleSummary): string {
 
 const MAX_VISIBLE_TAGS = 2;
 
-export function SampleTable({ items, onSelect, selection, localeCodes }: SampleTableProps) {
+export function SampleTable({
+  items,
+  onSelect,
+  selection,
+  localeCodes,
+  onTagClick,
+}: SampleTableProps) {
   const { theme } = useThemeStore();
 
   const columns = useMemo<TableColumn<SampleSummary>[]>(() => {
@@ -169,7 +177,13 @@ export function SampleTable({ items, onSelect, selection, localeCodes }: SampleT
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
             >
               {visible.map((tag) => (
-                <TagBadge key={tag}>{tag}</TagBadge>
+                <TagBadge
+                  key={tag}
+                  onClick={onTagClick ? () => onTagClick(tag) : undefined}
+                  title={onTagClick ? `"${tag}" 태그로 검색` : undefined}
+                >
+                  {tag}
+                </TagBadge>
               ))}
               {rest > 0 && (
                 <span style={{ color: theme.colors.textMuted, fontSize: theme.fontSize.xs }}>
@@ -184,7 +198,7 @@ export function SampleTable({ items, onSelect, selection, localeCodes }: SampleT
     );
 
     return cols;
-  }, [theme, selection, localeCodes]);
+  }, [theme, selection, localeCodes, onTagClick]);
 
   return (
     <>

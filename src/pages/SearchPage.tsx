@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@common/components/AppLayout';
 import { TABLE_ROW_H, TABLE_THEAD_H } from '@common/components/BaseTable';
-import { Button } from '@common/components/Button';
 import { Drawer } from '@common/components/Drawer';
 import { Pagination } from '@common/components/Pagination';
 import { TableBlock } from '@common/components/TableBlock';
@@ -11,20 +10,15 @@ import { LAYOUT, useFixedPageSize } from '@common/hooks/useFixedPageSize';
 import { usePagedNav } from '@common/hooks/usePagedNav';
 import { useThemeStore } from '@common/stores/themeStore';
 import { CopyButton } from '../components/CopyButton';
+import { EXPORT_ALL_MAX, ExportActions } from '../components/ExportActions';
 import { SampleDetailPanel } from '../components/SampleDetailPanel';
 import {
   SAMPLE_SEARCHBAR_EXPANDED_H,
   SAMPLE_SEARCHBAR_H,
   SampleSearchBar,
 } from '../components/SampleSearchBar';
-import { SampleTable, sampleKey } from '../components/SampleTable';
-import {
-  batchDownload,
-  extractErrorDetail,
-  getFilterMeta,
-  getSamples,
-  multiSearch,
-} from '../services/sampleService';
+import { SampleTable, sampleKey, type SampleSelection } from '../components/SampleTable';
+import { getFilterMeta, getSamples, multiSearch } from '../services/sampleService';
 import type {
   FilterMeta,
   MultiSearchResult,
@@ -32,8 +26,7 @@ import type {
   SampleSummary,
   SearchRequest,
 } from '../types/sample';
-import { BATCH_DOWNLOAD_MAX, BATCH_ZIP_PASSWORD } from '../types/sample';
-import { saveBlob } from '../utils/format';
+import { modifierToken } from '../utils/searchQuery';
 
 /** TableBlock 상하 padding 합 (16*2) */
 const TABLEBLOCK_PAD_Y = 32;
@@ -47,8 +40,8 @@ const OVERHEAD =
   TABLE_THEAD_H +
   LAYOUT.PAGINATION_H;
 
-/** 멀티 검색 요약 툴바(40) + 아래 여백(8) + 전체 선택 행(26) */
-const MULTI_TOOLBAR_H = 74;
+/** 선택/요약 툴바(40) + 아래 여백(8) + 전체 선택 행(26) — 단일/멀티 공통 */
+const TOOLBAR_H = 74;
 
 export function SearchPage() {
   useAppAccess('/sample');
@@ -58,18 +51,15 @@ export function SearchPage() {
   const [detailHash, setDetailHash] = useState<string | null>(null);
   // 필터 패널 확장 시 검색바 블럭이 커지므로 테이블 overhead 를 보정한다
   const [barExpanded, setBarExpanded] = useState(false);
-  const overhead = OVERHEAD + (barExpanded ? SAMPLE_SEARCHBAR_EXPANDED_H - SAMPLE_SEARCHBAR_H : 0);
-
-  // 로케일 국명 → 알파-2 코드 (테이블 국기 표시용)
-  const localeCodes = useMemo(
-    () =>
-      new Map(
-        (meta?.locales ?? [])
-          .filter((o) => o.label)
-          .map((o) => [o.name, o.label as string]),
-      ),
-    [meta],
-  );
+  // 태그 뱃지 클릭 → 검색바에 tag:값 주입 후 즉시 검색
+  const [inject, setInject] = useState<{ text: string; seq: number } | null>(null);
+  const handleTagClick = useCallback((tag: string) => {
+    setInject((prev) => ({ text: modifierToken('tag', tag), seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
+  const overhead =
+    OVERHEAD +
+    TOOLBAR_H +
+    (barExpanded ? SAMPLE_SEARCHBAR_EXPANDED_H - SAMPLE_SEARCHBAR_H : 0);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +75,24 @@ export function SearchPage() {
     };
   }, []);
 
+  // 검색바가 비어 있는 초기 전체 목록인지 — 검색어/필터가 하나라도 있어야 내보내기 허용
+  const searched =
+    req.mode === 'multi' ||
+    Object.values(req.query).some(
+      (v) => v !== undefined && (!Array.isArray(v) || v.length > 0),
+    );
+
+  // 로케일 국명 → 알파-2 코드 (테이블 국기 표시용)
+  const localeCodes = useMemo(
+    () =>
+      new Map(
+        (meta?.locales ?? [])
+          .filter((o) => o.label)
+          .map((o) => [o.name, o.label as string]),
+      ),
+    [meta],
+  );
+
   return (
     <AppLayout
       title="샘플 검색"
@@ -93,13 +101,20 @@ export function SearchPage() {
       version={__APP_VERSION__}
       contentMaxWidth="1700px"
     >
-      <SampleSearchBar meta={meta} onSearch={setReq} onExpandChange={setBarExpanded} />
+      <SampleSearchBar
+        meta={meta}
+        onSearch={setReq}
+        onExpandChange={setBarExpanded}
+        inject={inject}
+      />
       {req.mode === 'single' ? (
         <SingleResults
           query={req.query}
+          searched={searched}
           overhead={overhead}
           localeCodes={localeCodes}
           onSelect={(s) => setDetailHash(sampleKey(s))}
+          onTagClick={handleTagClick}
         />
       ) : (
         <MultiResults
@@ -107,6 +122,7 @@ export function SearchPage() {
           overhead={overhead}
           localeCodes={localeCodes}
           onSelect={(s) => setDetailHash(sampleKey(s))}
+          onTagClick={handleTagClick}
         />
       )}
       <Drawer isOpen={detailHash !== null} onClose={() => setDetailHash(null)} width="880px">
@@ -118,19 +134,68 @@ export function SearchPage() {
   );
 }
 
-/** 단일 검색 (해시 1개/진단명 + 상세 필터) — cursor 페이지네이션 */
+/**
+ * 체크박스 선택 상태 — 해시 키로 요약을 보관해 페이지를 넘겨도 선택이 유지된다.
+ * (CSV/ZIP 내보내기가 선택 항목의 데이터를 그대로 쓴다)
+ */
+function useSampleSelection() {
+  const [map, setMap] = useState<Map<string, SampleSummary>>(new Map());
+
+  const toggle = useCallback((sample: SampleSummary) => {
+    setMap((prev) => {
+      const next = new Map(prev);
+      const key = sampleKey(sample);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.set(key, sample);
+      }
+      return next;
+    });
+  }, []);
+
+  /** items 가 모두 선택돼 있으면 해제, 아니면 모두 추가 */
+  const toggleAllOf = useCallback((items: SampleSummary[]) => {
+    setMap((prev) => {
+      const next = new Map(prev);
+      const allIn = items.length > 0 && items.every((s) => next.has(sampleKey(s)));
+      items.forEach((s) => {
+        if (allIn) {
+          next.delete(sampleKey(s));
+        } else {
+          next.set(sampleKey(s), s);
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const clear = useCallback(() => setMap(new Map()), []);
+
+  const selected = useMemo(() => new Set(map.keys()), [map]);
+  const items = useMemo(() => Array.from(map.values()), [map]);
+  return { selected, items, toggle, toggleAllOf, clear };
+}
+
+/** 단일 검색 (해시 1개/진단명 + 필터) — cursor 페이지네이션, 선택은 페이지를 넘어 유지 */
 function SingleResults({
   query,
+  searched,
   overhead,
   localeCodes,
   onSelect,
+  onTagClick,
 }: {
   query: SampleSearchQuery;
+  searched: boolean;
   overhead: number;
   localeCodes: Map<string, string>;
   onSelect: (sample: SampleSummary) => void;
+  onTagClick: (tag: string) => void;
 }) {
+  const { theme } = useThemeStore();
   const filterKey = JSON.stringify(query);
+  const sel = useSampleSelection();
 
   const pageSize = useFixedPageSize({ overhead, rowHeight: TABLE_ROW_H });
 
@@ -147,9 +212,72 @@ function SingleResults({
     deps: [filterKey],
   });
 
+  // 검색 조건이 바뀌면 이전 선택은 의미가 없다
+  useEffect(() => {
+    sel.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
+  // "검색 전체" 내보내기 — cursor 페이지 반복 조회 (EXPORT_ALL_MAX 상한)
+  const fetchAllResults = useCallback(async () => {
+    const acc: SampleSummary[] = [];
+    let cursor: string | undefined;
+    let snapshot: number | undefined;
+    for (;;) {
+      const page = await getSamples(query, cursor, snapshot, 100);
+      acc.push(...page.items);
+      snapshot = page.snapshot_idx;
+      if (!page.has_more || !page.next_cursor || acc.length >= EXPORT_ALL_MAX) break;
+      cursor = page.next_cursor;
+    }
+    return acc.slice(0, EXPORT_ALL_MAX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterKey]);
+
+  const selection: SampleSelection = {
+    selected: sel.selected,
+    onToggle: sel.toggle,
+    onToggleAll: () => sel.toggleAllOf(nav.items),
+    allSelected:
+      nav.items.length > 0 && nav.items.every((s) => sel.selected.has(sampleKey(s))),
+  };
+
   return (
     <TableBlock>
-      <SampleTable items={nav.items} onSelect={onSelect} localeCodes={localeCodes} />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: '40px',
+          marginBottom: '8px',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontSize: theme.fontSize.base,
+            fontWeight: 700,
+            color: theme.colors.text,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          검색 결과{' '}
+          <span style={{ color: theme.colors.primary }}>{nav.total.toLocaleString()}</span> 건
+        </span>
+        <ExportActions
+          selected={sel.items}
+          listItems={nav.items}
+          listLabel="현재 페이지"
+          all={searched ? { total: nav.total, fetchAll: fetchAllResults } : undefined}
+        />
+      </div>
+      <SampleTable
+        items={nav.items}
+        onSelect={onSelect}
+        localeCodes={localeCodes}
+        selection={selection}
+        onTagClick={onTagClick}
+      />
       {nav.loading && <TableEmptyState>로딩 중...</TableEmptyState>}
       {!nav.loading && nav.error && <TableEmptyState>{nav.error}</TableEmptyState>}
       {!nav.loading && !nav.error && nav.items.length === 0 && (
@@ -172,7 +300,7 @@ function SingleResults({
 }
 
 /**
- * 멀티 해시 검색 결과 — 같은 화면에서 matched 테이블 + 배치 다운로드,
+ * 멀티 해시 검색 결과 — 같은 화면에서 matched 테이블 + 선택 액션,
  * unmatched 는 요약 툴바에서 펼쳐 확인 (결과 ≤ 500 이라 클라이언트 페이지네이션)
  */
 function MultiResults({
@@ -180,11 +308,13 @@ function MultiResults({
   overhead,
   localeCodes,
   onSelect,
+  onTagClick,
 }: {
   hashes: string[];
   overhead: number;
   localeCodes: Map<string, string>;
   onSelect: (sample: SampleSummary) => void;
+  onTagClick: (tag: string) => void;
 }) {
   const { theme, isDarkMode } = useThemeStore();
 
@@ -192,10 +322,8 @@ function MultiResults({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [downloading, setDownloading] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const sel = useSampleSelection();
 
   const hashesKey = hashes.join(',');
 
@@ -204,10 +332,9 @@ function MultiResults({
     setLoading(true);
     setError(null);
     setResult(null);
-    setSelected(new Set());
     setPage(1);
-    setNotice(null);
     setShowUnmatched(false);
+    sel.clear();
     multiSearch(hashes)
       .then((r) => {
         if (active) setResult(r);
@@ -224,10 +351,7 @@ function MultiResults({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hashesKey]);
 
-  const pageSize = useFixedPageSize({
-    overhead: overhead + MULTI_TOOLBAR_H,
-    rowHeight: TABLE_ROW_H,
-  });
+  const pageSize = useFixedPageSize({ overhead, rowHeight: TABLE_ROW_H });
 
   const matched = result?.matched ?? [];
   const unmatched = result?.unmatched ?? [];
@@ -239,58 +363,20 @@ function MultiResults({
     [matched, safePage, pageSize],
   );
 
-  const toggle = (sample: SampleSummary) => {
-    const key = sampleKey(sample);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        if (next.size >= BATCH_DOWNLOAD_MAX) {
-          setNotice(`배치 다운로드는 최대 ${BATCH_DOWNLOAD_MAX}개까지 선택할 수 있습니다.`);
-          return prev;
-        }
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  const allSelected =
-    matched.length > 0 &&
-    matched.slice(0, BATCH_DOWNLOAD_MAX).every((s) => selected.has(sampleKey(s)));
-
-  const toggleAll = () => {
-    if (allSelected) {
-      setSelected(new Set());
-      return;
-    }
-    if (matched.length > BATCH_DOWNLOAD_MAX) {
-      setNotice(`배치 다운로드 한도(${BATCH_DOWNLOAD_MAX}개)까지만 선택했습니다.`);
-    }
-    setSelected(new Set(matched.slice(0, BATCH_DOWNLOAD_MAX).map(sampleKey)));
-  };
-
-  const handleBatchDownload = async () => {
-    if (selected.size === 0 || downloading) return;
-    setDownloading(true);
-    setNotice(null);
-    try {
-      const blob = await batchDownload(Array.from(selected));
-      saveBlob(blob, 'samples.zip');
-    } catch (err) {
-      const detail = await extractErrorDetail(err);
-      setNotice(detail ?? '배치 다운로드에 실패했습니다.');
-    } finally {
-      setDownloading(false);
-    }
+  const selection: SampleSelection = {
+    selected: sel.selected,
+    onToggle: sel.toggle,
+    // 멀티 검색은 matched 전체가 메모리에 있으므로 전체 선택은 전 페이지 대상
+    onToggleAll: () => sel.toggleAllOf(matched),
+    allSelected:
+      matched.length > 0 && matched.every((s) => sel.selected.has(sampleKey(s))),
   };
 
   const countStyle = (color: string) => ({ color, fontWeight: 700 as const });
 
   return (
     <TableBlock>
-      {/* 요약 툴바 — 일치/불일치 + 배치 다운로드 */}
+      {/* 요약 + 선택 액션 툴바 */}
       <div
         style={{
           display: 'flex',
@@ -303,7 +389,7 @@ function MultiResults({
           color: theme.colors.text,
         }}
       >
-        <span style={{ fontWeight: 700 }}>
+        <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
           일치 <span style={countStyle(theme.colors.success)}>{matched.length.toLocaleString()}</span>
           {' · '}불일치{' '}
           <span style={countStyle(unmatched.length > 0 ? theme.colors.danger : theme.colors.textMuted)}>
@@ -323,6 +409,7 @@ function MultiResults({
                 fontSize: theme.fontSize.sm,
                 color: theme.colors.primary,
                 textDecoration: 'underline',
+                whiteSpace: 'nowrap',
               }}
             >
               {showUnmatched ? '불일치 해시 접기' : '불일치 해시 보기'}
@@ -330,20 +417,7 @@ function MultiResults({
             <CopyButton text={unmatched.join('\n')} title="불일치 해시 전체 복사" />
           </span>
         )}
-        <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
-          선택 {selected.size}/{BATCH_DOWNLOAD_MAX}
-        </span>
-        {notice && (
-          <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.danger }}>{notice}</span>
-        )}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.warning, fontWeight: 600 }}>
-            다운로드 ZIP 비밀번호: {BATCH_ZIP_PASSWORD}
-          </span>
-          <Button onClick={handleBatchDownload} disabled={selected.size === 0 || downloading}>
-            {downloading ? '다운로드 중...' : '선택 샘플 다운로드 (ZIP)'}
-          </Button>
-        </div>
+        <ExportActions selected={sel.items} listItems={matched} listLabel="일치 전체" />
       </div>
 
       {/* 불일치 해시 목록 (펼침 시 — 페이지가 세로 스크롤될 수 있음) */}
@@ -372,7 +446,8 @@ function MultiResults({
         items={pageItems}
         onSelect={onSelect}
         localeCodes={localeCodes}
-        selection={{ selected, onToggle: toggle, onToggleAll: toggleAll, allSelected }}
+        selection={selection}
+        onTagClick={onTagClick}
       />
       {loading && <TableEmptyState>멀티 검색 중...</TableEmptyState>}
       {!loading && error && <TableEmptyState>{error}</TableEmptyState>}

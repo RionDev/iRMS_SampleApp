@@ -1,4 +1,4 @@
-import { useMemo, useState, type ClipboardEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ClipboardEvent, type FormEvent } from 'react';
 import { Button } from '@common/components/Button';
 import { SearchInput } from '@common/components/SearchInput';
 import { SearchSelect } from '@common/components/SearchSelect';
@@ -28,6 +28,8 @@ interface SampleSearchBarProps {
   onSearch: (req: SearchRequest) => void;
   /** 필터 패널 확장 여부 변경 알림 — 부모의 useFixedPageSize overhead 보정용 */
   onExpandChange?: (expanded: boolean) => void;
+  /** 외부 주입 검색 (예: 태그 뱃지 클릭) — seq 가 바뀔 때마다 text 로 교체 후 즉시 검색 */
+  inject?: { text: string; seq: number } | null;
 }
 
 /** 사전 필터 섹션 정의 — 필터 패널 select 행/도움말 팝오버 공용 (short: 좁은 select 용) */
@@ -104,7 +106,7 @@ function FilterSelect({
   );
 }
 
-export function SampleSearchBar({ meta, onSearch, onExpandChange }: SampleSearchBarProps) {
+export function SampleSearchBar({ meta, onSearch, onExpandChange, inject }: SampleSearchBarProps) {
   const { theme, isDarkMode } = useThemeStore();
   const [q, setQ] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
@@ -160,8 +162,21 @@ export function SampleSearchBar({ meta, onSearch, onExpandChange }: SampleSearch
     onExpandChange?.(open);
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  // ESC 로 도움말 팝오버/필터 패널 닫기
+  useEffect(() => {
+    if (!helpOpen && !filterOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setHelpOpen(false);
+      setFilterOpen(false);
+      onExpandChange?.(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [helpOpen, filterOpen]);
+
+  const doSubmit = () => {
     if (hasError) return;
     setHelpOpen(false);
     if (isMulti) {
@@ -177,6 +192,27 @@ export function SampleSearchBar({ meta, onSearch, onExpandChange }: SampleSearch
       },
     });
   };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    doSubmit();
+  };
+
+  // 외부 주입 검색 — q 교체 후 리렌더로 parsed 가 갱신된 다음 제출한다
+  const [pendingInjectSeq, setPendingInjectSeq] = useState<number | null>(null);
+  useEffect(() => {
+    if (!inject) return;
+    setQ(inject.text);
+    setPendingInjectSeq(inject.seq);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inject?.seq]);
+  useEffect(() => {
+    if (pendingInjectSeq === null) return;
+    if (inject && q !== inject.text) return; // setQ 반영 대기
+    setPendingInjectSeq(null);
+    doSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingInjectSeq, q]);
 
   // 여러 줄 해시 목록 붙여넣기 지원 — input 은 개행을 버리므로 공백으로 정규화해 삽입
   const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
