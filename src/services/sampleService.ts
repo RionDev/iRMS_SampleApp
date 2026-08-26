@@ -14,8 +14,8 @@ import * as mock from './mock/mockSampleService';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === '1';
 
-/** 다운로드는 파일 스트림이라 공통 10s timeout 을 넉넉히 늘린다 */
-const DOWNLOAD_TIMEOUT_MS = 120_000;
+/** 다운로드는 SFTP 페치+ZIP 생성 후 스트림 — 게이트웨이 300s 에 맞춰 늘린다 */
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 
 export async function getSamples(
   query: SampleSearchQuery,

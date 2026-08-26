@@ -1,13 +1,17 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button } from '@common/components/Button';
 import { Modal } from '@common/components/Modal';
 import { SearchInput } from '@common/components/SearchInput';
 import { useThemeStore } from '@common/stores/themeStore';
 import { batchDownload, extractErrorDetail } from '../services/sampleService';
 import type { SampleSummary } from '../types/sample';
-import { BATCH_DOWNLOAD_MAX, BATCH_ZIP_PASSWORD } from '../types/sample';
+import {
+  BATCH_DOWNLOAD_MAX,
+  BATCH_DOWNLOAD_MAX_BYTES,
+  BATCH_ZIP_PASSWORD,
+} from '../types/sample';
 import { CSV_COLUMNS, samplesToCsv } from '../utils/csv';
-import { saveBlob } from '../utils/format';
+import { formatSize, saveBlob } from '../utils/format';
 import { sampleKey } from './SampleTable';
 
 /** "검색 전체" 내보내기 상한 (100건 페이지 반복 조회) */
@@ -42,6 +46,17 @@ function isStored(s: SampleSummary): boolean {
   return s.storage_status === 'Stored';
 }
 
+/** ESC 로 모달 닫기 (공통 Modal 은 배경 클릭만 지원) */
+function useEscClose(onClose: () => void) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+}
+
 function FieldLabel({ children }: { children: ReactNode }) {
   const { theme } = useThemeStore();
   return (
@@ -58,7 +73,8 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function ScopeRadios({
+/** 범위 선택 — 세그먼티드 컨트롤 (개수는 아래 줄에 크게) */
+function ScopeSegments({
   scope,
   onChange,
   selectedCount,
@@ -74,43 +90,109 @@ function ScopeRadios({
   all?: ExportAllSource;
 }) {
   const { theme } = useThemeStore();
-  const radio = (value: Scope, label: string, disabled: boolean, title?: string): ReactNode => (
-    <label
-      key={value}
-      title={title}
+  const allOverMax = (all?.total ?? 0) > EXPORT_ALL_MAX;
+
+  const segments: { value: Scope; label: string; count: number; disabled: boolean; title?: string }[] = [
+    // 선택이 없으면 선택 항목 칸 자체를 숨긴다
+    ...(selectedCount > 0
+      ? [{ value: 'selected' as Scope, label: '선택 항목', count: selectedCount, disabled: false }]
+      : []),
+    { value: 'list', label: listLabel, count: listCount, disabled: listCount === 0 },
+    ...(all
+      ? [
+          {
+            value: 'all' as Scope,
+            label: '검색 전체',
+            count: all.total,
+            disabled: all.total === 0 || allOverMax,
+            title: allOverMax
+              ? `검색 전체는 최대 ${EXPORT_ALL_MAX.toLocaleString()}건까지 가능합니다 — 검색을 좁혀 주세요`
+              : undefined,
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <div
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        fontSize: theme.fontSize.base,
-        color: disabled ? theme.colors.textMuted : theme.colors.text,
-        cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'flex',
+        border: `1px solid ${theme.colors.border}`,
+        borderRadius: theme.radius.md,
+        overflow: 'hidden',
       }}
     >
-      <input
-        type="radio"
-        checked={scope === value}
-        disabled={disabled}
-        onChange={() => onChange(value)}
-      />
-      {label}
-    </label>
+      {segments.map((seg, i) => {
+        const active = scope === seg.value;
+        return (
+          <button
+            key={seg.value}
+            type="button"
+            disabled={seg.disabled}
+            title={seg.title}
+            onClick={() => onChange(seg.value)}
+            style={{
+              flex: 1,
+              padding: '10px 8px',
+              border: 'none',
+              borderLeft: i > 0 ? `1px solid ${theme.colors.border}` : 'none',
+              backgroundColor: active ? `${theme.colors.primary}1a` : 'transparent',
+              cursor: seg.disabled ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '2px',
+              fontFamily: theme.fontFamily,
+            }}
+          >
+            <span
+              style={{
+                fontSize: theme.fontSize.sm,
+                fontWeight: active ? 700 : 500,
+                color: seg.disabled
+                  ? theme.colors.textMuted
+                  : active
+                    ? theme.colors.primary
+                    : theme.colors.text,
+              }}
+            >
+              {seg.label}
+            </span>
+            <span
+              style={{
+                fontSize: theme.fontSize.lg,
+                fontWeight: 700,
+                color: seg.disabled
+                  ? theme.colors.textMuted
+                  : active
+                    ? theme.colors.primary
+                    : theme.colors.textMuted,
+              }}
+            >
+              {seg.count.toLocaleString()}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
+}
 
-  const allOverMax = (all?.total ?? 0) > EXPORT_ALL_MAX;
+/** 모달 하단 버튼 행 (구분선 포함) */
+function ModalFooter({ children }: { children: ReactNode }) {
+  const { theme } = useThemeStore();
   return (
-    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-      {radio('selected', `선택 항목 (${selectedCount.toLocaleString()})`, selectedCount === 0)}
-      {radio('list', `${listLabel} (${listCount.toLocaleString()})`, listCount === 0)}
-      {all &&
-        radio(
-          'all',
-          `검색 전체 (${all.total.toLocaleString()})`,
-          all.total === 0 || allOverMax,
-          allOverMax
-            ? `검색 전체 내보내기는 최대 ${EXPORT_ALL_MAX.toLocaleString()}건까지 가능합니다 — 검색을 좁혀 주세요`
-            : undefined,
-        )}
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        marginTop: '20px',
+        paddingTop: '14px',
+        borderTop: `1px solid ${theme.colors.border}`,
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -190,6 +272,7 @@ interface ExportModalProps {
 
 function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }: ExportModalProps) {
   const { theme } = useThemeStore();
+  useEscClose(onClose);
   const [scope, setScope] = useState<Scope>(defaultScope);
   const [keys, setKeys] = useState<Set<string>>(new Set(CSV_COLUMNS.map((c) => c.key)));
   const [filename, setFilename] = useState('samples');
@@ -235,19 +318,23 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
     }
   };
 
-  const checkboxLabel: CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
+  const chipStyle = (active: boolean): CSSProperties => ({
+    padding: '3px 10px',
+    borderRadius: '999px',
     fontSize: theme.fontSize.sm,
-    color: theme.colors.text,
+    fontWeight: active ? 600 : 400,
+    lineHeight: '18px',
     cursor: 'pointer',
-  };
+    border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
+    backgroundColor: active ? `${theme.colors.primary}1a` : 'transparent',
+    color: active ? theme.colors.primary : theme.colors.textMuted,
+    fontFamily: theme.fontFamily,
+  });
 
   return (
     <Modal isOpen onClose={onClose} title="CSV 내보내기">
       <FieldLabel>대상 범위</FieldLabel>
-      <ScopeRadios
+      <ScopeSegments
         scope={scope}
         onChange={setScope}
         selectedCount={selected.length}
@@ -257,7 +344,11 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
       />
 
       <FieldLabel>
-        컬럼 ({keys.size}/{CSV_COLUMNS.length}){' '}
+        컬럼{' '}
+        <span style={{ color: theme.colors.primary }}>
+          {keys.size}
+        </span>
+        /{CSV_COLUMNS.length}
         <button
           type="button"
           onClick={() =>
@@ -267,7 +358,7 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
             border: 'none',
             background: 'none',
             padding: 0,
-            marginLeft: '6px',
+            marginLeft: '8px',
             cursor: 'pointer',
             fontSize: theme.fontSize.sm,
             color: theme.colors.primary,
@@ -277,19 +368,21 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
           {allChecked ? '전체 해제' : '전체 선택'}
         </button>
       </FieldLabel>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '6px 12px',
-        }}
-      >
-        {CSV_COLUMNS.map((c) => (
-          <label key={c.key} style={checkboxLabel}>
-            <input type="checkbox" checked={keys.has(c.key)} onChange={() => toggleKey(c.key)} />
-            {c.label}
-          </label>
-        ))}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {CSV_COLUMNS.map((c) => {
+          const active = keys.has(c.key);
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => toggleKey(c.key)}
+              aria-pressed={active}
+              style={chipStyle(active)}
+            >
+              {c.label}
+            </button>
+          );
+        })}
       </div>
 
       <FieldLabel>파일명</FieldLabel>
@@ -308,62 +401,82 @@ function CsvModal({ selected, listItems, listLabel, all, defaultScope, onClose }
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+      <ModalFooter>
         <Button variant="secondary" onClick={onClose}>
           취소
         </Button>
         <Button onClick={handleExport} disabled={!canExport || busy}>
           {busy ? '내보내는 중...' : `내보내기 (${targetCount.toLocaleString()}건)`}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }
 
 function ZipModal({ selected, listItems, listLabel, all, defaultScope, onClose }: ExportModalProps) {
   const { theme } = useThemeStore();
+  useEscClose(onClose);
   const [scope, setScope] = useState<Scope>(defaultScope);
   const [filename, setFilename] = useState('samples');
   const [downloading, setDownloading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // "검색 전체" 선택 시 즉시 전체 조회 — 파일 보관 수를 다른 범위처럼 M/N 으로 보여준다
+  // (deps 는 scope 만 — 상태 갱신이 cleanup 을 유발해 결과가 버려지지 않도록)
+  const [allItems, setAllItems] = useState<SampleSummary[] | null>(null);
+  const [allLoading, setAllLoading] = useState(false);
+  useEffect(() => {
+    if (scope !== 'all' || !all || allItems !== null) return;
+    let active = true;
+    setAllLoading(true);
+    all
+      .fetchAll()
+      .then((items) => {
+        if (active) setAllItems(items);
+      })
+      .catch(() => {
+        if (active) setNotice('검색 전체 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      })
+      .finally(() => {
+        if (active) setAllLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
+
   // 실제 파일이 보관(Stored)된 샘플만 다운로드 대상 — 아니면 파일 없는 ZIP 만 내려온다
-  const knownTarget = scope === 'selected' ? selected : scope === 'list' ? listItems : null;
-  const knownStored = useMemo(
-    () => (knownTarget ? knownTarget.filter(isStored) : null),
-    [knownTarget],
+  const target = scope === 'selected' ? selected : scope === 'list' ? listItems : allItems;
+  const stored = useMemo(() => (target ? target.filter(isStored) : null), [target]);
+  const storedBytes = useMemo(
+    () => (stored ? stored.reduce((sum, s) => sum + s.file_size, 0) : 0),
+    [stored],
   );
-  const overMax = knownStored !== null && knownStored.length > BATCH_DOWNLOAD_MAX;
-  const canDownload =
-    scope === 'all'
-      ? (all?.total ?? 0) > 0
-      : knownStored !== null && knownStored.length > 0 && !overMax;
+  const overMax = stored !== null && stored.length > BATCH_DOWNLOAD_MAX;
+  const overSize = storedBytes > BATCH_DOWNLOAD_MAX_BYTES;
+  // 보관 0건은 버튼을 막지 않고 클릭 시 알림창으로 알린다
+  const canDownload = stored !== null && !overMax && !overSize;
 
   const handleDownload = async () => {
-    if (!canDownload || downloading) return;
+    if (!canDownload || downloading || stored === null) return;
+    if (stored.length === 0) {
+      window.alert('파일이 보관(Stored)된 샘플이 없어 다운로드할 항목이 없습니다.');
+      return;
+    }
     setDownloading(true);
     setNotice(null);
     try {
-      const stored =
-        knownStored ?? (await all!.fetchAll()).filter(isStored);
-      if (stored.length === 0) {
-        setNotice('파일이 보관(Stored)된 샘플이 없어 다운로드할 항목이 없습니다.');
-        setDownloading(false);
-        return;
-      }
-      if (stored.length > BATCH_DOWNLOAD_MAX) {
-        setNotice(
-          `파일 보관 샘플이 ${stored.length.toLocaleString()}개로 한도(${BATCH_DOWNLOAD_MAX}개)를 초과합니다 — 범위를 좁혀 주세요.`,
-        );
-        setDownloading(false);
-        return;
-      }
       const blob = await batchDownload(stored.map(sampleKey));
       saveBlob(blob, `${filename.trim() || 'samples'}.zip`);
       onClose();
     } catch (err) {
       const detail = await extractErrorDetail(err);
-      setNotice(detail ?? '배치 다운로드에 실패했습니다.');
+      setNotice(
+        detail === 'size_limit_exceeded'
+          ? `총 용량 한도(${formatSize(BATCH_DOWNLOAD_MAX_BYTES)})를 초과했습니다 — 범위를 좁혀 주세요.`
+          : (detail ?? '배치 다운로드에 실패했습니다.'),
+      );
       setDownloading(false);
     }
   };
@@ -371,51 +484,83 @@ function ZipModal({ selected, listItems, listLabel, all, defaultScope, onClose }
   return (
     <Modal isOpen onClose={onClose} title="샘플 파일 다운로드">
       <FieldLabel>대상 범위</FieldLabel>
-      <ScopeRadios
+      <ScopeSegments
         scope={scope}
-        onChange={setScope}
+        onChange={(s) => {
+          setScope(s);
+          setNotice(null);
+        }}
         selectedCount={selected.length}
         listCount={listItems.length}
         listLabel={listLabel}
         all={all}
       />
 
+      <FieldLabel>다운로드 정보</FieldLabel>
       <div
         style={{
-          marginTop: '14px',
-          padding: '10px 12px',
+          padding: '12px 14px',
           borderRadius: theme.radius.sm,
           backgroundColor: theme.colors.surfaceMuted,
           fontSize: theme.fontSize.sm,
           color: theme.colors.text,
-          lineHeight: 1.7,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
         }}
       >
-        {knownStored !== null ? (
-          <>
-            대상 {(knownTarget?.length ?? 0).toLocaleString()}건 중 파일 보관(Stored){' '}
-            <b>{knownStored.length.toLocaleString()}건</b>이 다운로드됩니다.
-            {overMax && (
-              <div style={{ color: theme.colors.danger }}>
-                파일 다운로드는 한 번에 최대 {BATCH_DOWNLOAD_MAX}개까지 가능합니다 — 범위를
-                좁혀 주세요.
-              </div>
-            )}
-            {knownStored.length === 0 && (
-              <div style={{ color: theme.colors.danger }}>
-                파일이 보관된 샘플이 없어 다운로드할 수 없습니다.
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            실행 시 검색 전체 {(all?.total ?? 0).toLocaleString()}건을 조회해 파일 보관(Stored)
-            샘플만 담습니다 (최대 {BATCH_DOWNLOAD_MAX}개 — 초과 시 중단).
-          </>
-        )}
-        <div style={{ color: theme.colors.warning }}>
-          AES 암호화 ZIP — 비밀번호: <b>{BATCH_ZIP_PASSWORD}</b>
+        <div style={{ display: 'flex' }}>
+          <span style={{ width: '96px', flexShrink: 0, color: theme.colors.textMuted }}>
+            파일 보관
+          </span>
+          {stored !== null ? (
+            <b
+              style={{
+                color:
+                  stored.length === 0 || overMax ? theme.colors.danger : theme.colors.text,
+              }}
+            >
+              {stored.length.toLocaleString()} / {(target?.length ?? 0).toLocaleString()}건
+            </b>
+          ) : (
+            <span style={{ color: theme.colors.textMuted }}>
+              {allLoading ? '검색 전체 조회 중...' : '-'}
+            </span>
+          )}
         </div>
+        <div style={{ display: 'flex' }}>
+          <span style={{ width: '96px', flexShrink: 0, color: theme.colors.textMuted }}>
+            예상 용량
+          </span>
+          {stored !== null ? (
+            <b style={{ color: overSize ? theme.colors.danger : theme.colors.text }}>
+              {formatSize(storedBytes)}
+            </b>
+          ) : (
+            <span style={{ color: theme.colors.textMuted }}>-</span>
+          )}
+        </div>
+        <div style={{ display: 'flex' }}>
+          <span style={{ width: '96px', flexShrink: 0, color: theme.colors.textMuted }}>
+            한도
+          </span>
+          <span>
+            1회 최대 {BATCH_DOWNLOAD_MAX}개 · 총 {formatSize(BATCH_DOWNLOAD_MAX_BYTES)}
+          </span>
+        </div>
+        <div style={{ display: 'flex' }}>
+          <span style={{ width: '96px', flexShrink: 0, color: theme.colors.textMuted }}>
+            ZIP 비밀번호
+          </span>
+          <b style={{ color: theme.colors.warning }}>{BATCH_ZIP_PASSWORD}</b>
+        </div>
+        {(overMax || overSize) && (
+          <div style={{ color: theme.colors.danger }}>
+            {overMax
+              ? '보관 샘플 개수가 한도를 초과합니다 — 범위를 좁혀 주세요.'
+              : '예상 용량이 한도를 초과합니다 — 범위를 좁혀 주세요.'}
+          </div>
+        )}
       </div>
 
       <FieldLabel>파일명</FieldLabel>
@@ -434,18 +579,20 @@ function ZipModal({ selected, listItems, listLabel, all, defaultScope, onClose }
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+      <ModalFooter>
         <Button variant="secondary" onClick={onClose}>
           취소
         </Button>
-        <Button onClick={handleDownload} disabled={!canDownload || downloading}>
+        <Button onClick={handleDownload} disabled={!canDownload || downloading || allLoading}>
           {downloading
             ? '다운로드 중...'
-            : knownStored !== null
-              ? `다운로드 (${knownStored.length.toLocaleString()}건)`
-              : '다운로드'}
+            : allLoading
+              ? '조회 중...'
+              : stored !== null
+                ? `다운로드 (${stored.length.toLocaleString()}건)`
+                : '다운로드'}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

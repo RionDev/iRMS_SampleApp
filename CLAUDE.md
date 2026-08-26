@@ -37,7 +37,7 @@ select 2행 + 진단율/등록일 행을 펼치고, 선택 시 검색어에 `key
 - `GET /api/sample/samples/{hash}` 상세 (64hex→sha256, 32hex→md5)
 - `POST /api/sample/samples/multi-search` 멀티 검색 (최대 500)
 - `GET /api/sample/samples/{hash}/download` 단건 다운로드 (blob)
-- `POST /api/sample/samples/batch-download` 배치 다운로드 (AES ZIP, 최대 50, pw `infected`)
+- `POST /api/sample/samples/batch-download` 배치 다운로드 (AES ZIP, 최대 200·총 1GiB, pw `infected`)
 - `GET /api/sample/meta/filters` 필터 옵션 사전 (id+name)
 
 ## 공통 규칙

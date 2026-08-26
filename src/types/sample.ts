@@ -128,8 +128,10 @@ export type SearchRequest =
 
 /** 멀티 검색 최대 해시 수 (BE 계약) */
 export const MULTI_SEARCH_MAX = 500;
-/** 배치 다운로드 최대 선택 수 (BE 계약) */
-export const BATCH_DOWNLOAD_MAX = 50;
+/** 배치 다운로드 최대 개수 (BE 계약) */
+export const BATCH_DOWNLOAD_MAX = 200;
+/** 배치 다운로드 총 용량 한도 (BE BATCH_MAX_TOTAL_BYTES 기본값 1GiB) */
+export const BATCH_DOWNLOAD_MAX_BYTES = 1 << 30;
 /** 배치 다운로드 ZIP 비밀번호 (BE 기본값 — env 로 변경 가능) */
 export const BATCH_ZIP_PASSWORD = 'infected';
 
