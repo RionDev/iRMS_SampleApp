@@ -58,6 +58,14 @@ select 2행 + 진단율/등록일 행을 펼치고, 선택 시 검색어에 `key
 - 다운로드는 blob 응답 + `utils/format.ts` `saveBlob`. 실패 시
   `extractErrorDetail` 로 `{"detail": "not_stored"|"fetch_failed"}` 를 해석해 안내
 
+## 앱·기능 권한 (필수)
+
+- 페이지 진입은 `useAppAccess("/sample")`, **API 를 부르는 메뉴·버튼은 모두 `useFeatures("/sample").can(<기능 키>)` 로 숨긴다**
+- 역할(`user.role === ...`)로 직접 분기하지 않는다 — 직위·팀 제한은 관리자가 admin 앱 → 앱 상세 → 기능 권한에서 정한다
+- 기능 키는 `src/features.ts` 에 두고 BE 서비스 `src/features.py` 와 같은 값을 쓴다. 새 기능이면 BE 에 먼저 추가한다
+- FE 는 숨기기만 한다. 실제 차단은 BE `feature_dependency` 가 JWT·API 키 모두 같은 규칙으로 한다 (403). 상세: `common/docs/auth.md` "useFeatures"
+- 이 앱의 기능 키: `src/features.ts` (`search`·`export_csv`·`download`)
+
 ## BE API 대응
 
 | 서비스 함수 | 엔드포인트 | 메서드 | BE 대응 |
