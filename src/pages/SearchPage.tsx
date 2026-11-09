@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppCenterMessage } from '@common/components/AppCenterMessage';
 import { AppLayout } from '@common/components/AppLayout';
 import { TABLE_ROW_H, TABLE_THEAD_H } from '@common/components/BaseTable';
 import { Drawer } from '@common/components/Drawer';
@@ -6,6 +7,7 @@ import { Pagination } from '@common/components/Pagination';
 import { TableBlock } from '@common/components/TableBlock';
 import { TableEmptyState } from '@common/components/TableEmptyState';
 import { useAppAccess } from '@common/hooks/useAuth';
+import { useFeatures } from '@common/hooks/useFeatures';
 import { LAYOUT, useFixedPageSize } from '@common/hooks/useFixedPageSize';
 import { usePagedNav } from '@common/hooks/usePagedNav';
 import { useThemeStore } from '@common/stores/themeStore';
@@ -26,6 +28,7 @@ import type {
   SampleSummary,
   SearchRequest,
 } from '../types/sample';
+import { Feature, SAMPLE_APP } from '../features';
 import { modifierToken } from '../utils/searchQuery';
 
 /** TableBlock 상하 padding 합 (16*2) */
@@ -44,7 +47,29 @@ const OVERHEAD =
 const TOOLBAR_H = 74;
 
 export function SearchPage() {
-  useAppAccess('/sample');
+  useAppAccess(SAMPLE_APP);
+  const { can, loaded: featuresLoaded } = useFeatures(SAMPLE_APP);
+  const canSearch = can(Feature.SEARCH);
+
+  if (!featuresLoaded) {
+    return (
+      <AppLayout title="샘플 검색" appName="샘플" hideSidebar version={__APP_VERSION__}>
+        <AppCenterMessage>권한 확인 중...</AppCenterMessage>
+      </AppLayout>
+    );
+  }
+  if (!canSearch) {
+    return (
+      <AppLayout title="샘플 검색" appName="샘플" hideSidebar version={__APP_VERSION__}>
+        <AppCenterMessage>샘플 검색 권한이 없습니다. 관리자에게 문의하세요.</AppCenterMessage>
+      </AppLayout>
+    );
+  }
+  return <SearchContent />;
+}
+
+/** 검색 권한이 확인된 뒤에만 마운트 — 권한 없는 사용자가 검색 API 를 부르지 않게 한다 */
+function SearchContent() {
   const [meta, setMeta] = useState<FilterMeta | null>(null);
   const [req, setReq] = useState<SearchRequest>({ mode: 'single', query: {} });
   // 상세는 페이지 이동 대신 오버레이 드로어 — 검색 결과/페이지 상태가 유지된다 (admin 패턴)

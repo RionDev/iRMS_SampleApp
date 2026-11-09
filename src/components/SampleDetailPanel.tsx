@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@common/components/Button';
+import { useFeatures } from '@common/hooks/useFeatures';
 import { useThemeStore } from '@common/stores/themeStore';
+import { Feature, SAMPLE_APP } from '../features';
 import { downloadSample, extractErrorDetail, getSampleDetail } from '../services/sampleService';
 import type { SampleDetail } from '../types/sample';
 import { formatDate, formatSizeDetailed, saveBlob, storageStatusLabel } from '../utils/format';
@@ -126,6 +128,7 @@ interface SampleDetailPanelProps {
  */
 export function SampleDetailPanel({ hash, vendorNames, onClose }: SampleDetailPanelProps) {
   const { theme, isDarkMode } = useThemeStore();
+  const { can } = useFeatures(SAMPLE_APP);
 
   const [detail, setDetail] = useState<SampleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -203,7 +206,7 @@ export function SampleDetailPanel({ hash, vendorNames, onClose }: SampleDetailPa
               {notice}
             </span>
           )}
-          {detail && (
+          {detail && can(Feature.DOWNLOAD) && (
             <Button
               onClick={handleDownload}
               disabled={!detail.downloadable || downloading}

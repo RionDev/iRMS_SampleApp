@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Button } from '@common/components/Button';
 import { Modal } from '@common/components/Modal';
 import { SearchInput } from '@common/components/SearchInput';
+import { useFeatures } from '@common/hooks/useFeatures';
 import { useThemeStore } from '@common/stores/themeStore';
+import { Feature, SAMPLE_APP } from '../features';
 import { batchDownload, extractErrorDetail, getDiagnosesMap } from '../services/sampleService';
 import type { SampleSummary } from '../types/sample';
 import {
@@ -199,6 +201,7 @@ function ModalFooter({ children }: { children: ReactNode }) {
 
 export function ExportActions({ selected, listItems, listLabel, all }: ExportActionsProps) {
   const { theme } = useThemeStore();
+  const { can } = useFeatures(SAMPLE_APP);
   const [csvOpen, setCsvOpen] = useState(false);
   const [zipOpen, setZipOpen] = useState(false);
 
@@ -212,21 +215,26 @@ export function ExportActions({ selected, listItems, listLabel, all }: ExportAct
 
   return (
     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-      <Button
-        variant="secondary"
-        onClick={() => setCsvOpen(true)}
-        disabled={!hasAny}
-        title={hasAny ? undefined : '내보낼 결과가 없습니다'}
-      >
-        CSV 내보내기
-      </Button>
-      <Button
-        onClick={() => setZipOpen(true)}
-        disabled={!hasAny}
-        title={hasAny ? '샘플 파일(AES ZIP) 다운로드 설정' : '내보낼 결과가 없습니다'}
-      >
-        파일 다운로드
-      </Button>
+      {/* 기능 권한이 없는 버튼은 숨긴다 (admin 앱 → 앱 상세 → 기능 권한) */}
+      {can(Feature.EXPORT_CSV) && (
+        <Button
+          variant="secondary"
+          onClick={() => setCsvOpen(true)}
+          disabled={!hasAny}
+          title={hasAny ? undefined : '내보낼 결과가 없습니다'}
+        >
+          CSV 내보내기
+        </Button>
+      )}
+      {can(Feature.DOWNLOAD) && (
+        <Button
+          onClick={() => setZipOpen(true)}
+          disabled={!hasAny}
+          title={hasAny ? '샘플 파일(AES ZIP) 다운로드 설정' : '내보낼 결과가 없습니다'}
+        >
+          파일 다운로드
+        </Button>
+      )}
       <span
         title={
           hasSelection
