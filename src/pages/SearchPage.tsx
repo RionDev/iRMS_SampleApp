@@ -291,7 +291,11 @@ function SingleResults({
           }}
         >
           검색 결과{' '}
-          <span style={{ color: theme.colors.primary }}>{nav.total.toLocaleString()}</span> 건
+          <span style={{ color: theme.colors.primary }}>
+            {nav.total.toLocaleString()}
+            {nav.totalCapped ? '+' : ''}
+          </span>{' '}
+          건
         </span>
         <ExportActions
           selected={sel.items}
@@ -317,6 +321,7 @@ function SingleResults({
           page={nav.page}
           totalPages={nav.totalPages}
           total={nav.total}
+          totalCapped={nav.totalCapped}
           hasPrev={nav.hasPrev}
           hasNext={nav.hasNext}
           onPrev={nav.prev}
