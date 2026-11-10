@@ -15,7 +15,7 @@ docker run --rm \
     -v "$SERVICE_DIR:/app" \
     -w /app \
     -e "VITE_API_BASE_URL=$API_BASE_URL" \
-    node:18-alpine \
+    node:22-alpine \
     sh -c "npm install && npm run build"
 
 echo "   done: $SERVICE_DIR/dist"
