@@ -11,12 +11,14 @@ BE 는 sample-service (`/api/sample/*`).
 필터는 적용되지 않는다. 구 `/multi` 경로는 `/` 리다이렉트로만 남아 있다.
 
 필터는 검색어 내 `key:값` 문법으로 지정한다 (`utils/searchQuery.ts`):
-사전 필터 14종(`format/category/spectype/compiler/linker/library/crypter/overlay/
-resource/pool/locale/source/tag/label`)은 `/meta/filters` 의 name/label 을
+사전 필터 15종(`format/category/spectype/compiler/linker/library/crypter/overlay/
+resource/pool/locale/source/vendor/tag/label`)은 `/meta/filters` 의 name/label 을
 대소문자 무시로 id 변환해 BE 파라미터로 보낸다.
 정확 일치 우선, 없으면 부분 일치 (예: `locale:KR`, `locale:china`) —
 tag/label 을 제외한 단일 lookup 필터는 걸린 id 전부를 반복 파라미터로 보내
 BE 가 OR(in_) 검색하고, tag/label 은 AND 규약이라 여러 건이면 후보와 함께 에러.
+`vendor` 는 "해당 벤더가 진단한 샘플"(미진단 제외, OR)이고, 진단명과 함께 쓰면
+BE 가 같은 진단 행으로 매칭한다 (`vendor:kaspersky Trojan.Win32` = 카스퍼스키가 그 진단명을 준 샘플).
 `ratio:30..70`/`date:2026-01-01..` 범위 문법 지원.
 모르는 key 의 콜론 토큰은 진단명 텍스트로 남긴다 (예: `Trojan:Win32/...`).
 진단명은 항상 부분일치(substring)로 검색한다 (매칭 모드 select 없음).
@@ -36,7 +38,7 @@ select 2행 + 진단율/등록일 행을 펼치고, 선택 시 검색어에 `key
 - `GET /api/sample/samples` 검색 목록 (cursor+snapshot_idx 페이지네이션)
 - `GET /api/sample/samples/{hash}` 상세 (64hex→sha256, 32hex→md5)
 - `POST /api/sample/samples/multi-search` 멀티 검색 (최대 500)
-- `GET /api/sample/samples/{hash}/download` 단건 다운로드 (blob)
+- `GET /api/sample/samples/{hash}/download` 단건 다운로드 (blob — 배치와 같은 AES ZIP `<hash>.zip`, pw `infected`)
 - `POST /api/sample/samples/batch-download` 배치 다운로드 (AES ZIP, 최대 200·총 1GiB, pw `infected`)
 - `GET /api/sample/meta/filters` 필터 옵션 사전 (id+name)
 

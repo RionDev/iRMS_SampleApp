@@ -55,6 +55,11 @@ function decodeCursor(cursor: string): number {
 
 function matchesQuery(s: SampleDetail, query: SampleSearchQuery): boolean {
   const q = query.q?.trim();
+  // vendor 필터 — 해당 벤더의 진단만 남긴다 (진단명 검색과 같은 행 매칭, BE 와 동일)
+  const vendorNames = (query.vendor ?? []).map((id) => nameOf(FILTER_META.vendors, id));
+  const diagnoses =
+    vendorNames.length > 0 ? s.diagnoses.filter((d) => vendorNames.includes(d.vendor)) : s.diagnoses;
+  if (vendorNames.length > 0 && diagnoses.length === 0) return false;
   if (q) {
     const hashType = detectHashType(q);
     if (hashType) {
@@ -63,7 +68,7 @@ function matchesQuery(s: SampleDetail, query: SampleSearchQuery): boolean {
     } else {
       const needle = q.toLowerCase();
       const mode = query.match ?? 'prefix';
-      const hit = s.diagnoses.some((d) =>
+      const hit = diagnoses.some((d) =>
         mode === 'prefix'
           ? d.diagname.toLowerCase().startsWith(needle)
           : d.diagname.toLowerCase().includes(needle),

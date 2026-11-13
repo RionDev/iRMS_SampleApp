@@ -1,6 +1,7 @@
 // 검색창 필터 문법 파서 (VirusTotal Intelligence 스타일)
 //
 //   tag:apt label:critical format:exe ratio:30..70 date:2026-01-01.. Trojan.Win32
+//   vendor:kaspersky Trojan.Win32   ← "카스퍼스키가 Trojan.Win32* 로 진단한 샘플"
 //
 // - key:value 토큰 중 key 가 아는 필터면 modifier, 아니면 자유 텍스트로 남긴다
 //   (진단명에 콜론이 들어가는 경우 — 예: Trojan:Win32/Wacatac — 를 위해)
@@ -24,6 +25,7 @@ export const DICT_MODIFIERS = {
   pool: 'pools',
   locale: 'locales',
   source: 'sources',
+  vendor: 'vendors',
   tag: 'tags',
   label: 'labels',
 } as const;

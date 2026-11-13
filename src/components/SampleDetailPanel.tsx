@@ -4,7 +4,7 @@ import { useFeatures } from '@common/hooks/useFeatures';
 import { useThemeStore } from '@common/stores/themeStore';
 import { Feature, SAMPLE_APP } from '../features';
 import { downloadSample, extractErrorDetail, getSampleDetail } from '../services/sampleService';
-import type { SampleDetail } from '../types/sample';
+import { BATCH_ZIP_PASSWORD, type SampleDetail } from '../types/sample';
 import { formatDate, formatSizeDetailed, saveBlob, storageStatusLabel } from '../utils/format';
 import { CopyButton } from './CopyButton';
 import { DetectionDonut } from './DetectionDonut';
@@ -175,7 +175,8 @@ export function SampleDetailPanel({ hash, vendorNames, onClose }: SampleDetailPa
     setNotice(null);
     try {
       const blob = await downloadSample(detail.sha256 ?? detail.md5);
-      saveBlob(blob, `${detail.sha256 ?? detail.md5}.bin`);
+      // BE 가 배치와 같은 암호 ZIP 으로 내려준다 (안에 <hash>.bin)
+      saveBlob(blob, `${detail.sha256 ?? detail.md5}.zip`);
     } catch (error) {
       const detailMsg = await extractErrorDetail(error);
       setNotice(
@@ -206,13 +207,18 @@ export function SampleDetailPanel({ hash, vendorNames, onClose }: SampleDetailPa
               {notice}
             </span>
           )}
+          {detail && can(Feature.DOWNLOAD) && detail.downloadable && (
+            <span style={{ fontSize: theme.fontSize.sm, color: theme.colors.textMuted }}>
+              ZIP 비밀번호 <b style={{ color: theme.colors.warning }}>{BATCH_ZIP_PASSWORD}</b>
+            </span>
+          )}
           {detail && can(Feature.DOWNLOAD) && (
             <Button
               onClick={handleDownload}
               disabled={!detail.downloadable || downloading}
               title={
                 detail.downloadable
-                  ? '샘플 파일 다운로드'
+                  ? `샘플 파일 다운로드 (암호 ZIP, 비밀번호 ${BATCH_ZIP_PASSWORD})`
                   : '보관 중인 샘플이 아니어서 다운로드할 수 없습니다.'
               }
             >

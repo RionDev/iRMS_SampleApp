@@ -43,6 +43,7 @@ export async function getSamples(
       crypter: query.crypter,
       overlay: query.overlay,
       resource: query.resource,
+      vendor: query.vendor,
       tag: query.tag,
       label: query.label,
       ratio_min: query.ratio_min,

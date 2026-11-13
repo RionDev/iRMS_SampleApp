@@ -108,6 +108,8 @@ export interface SampleSearchQuery {
   crypter?: number[];
   overlay?: number[];
   resource?: number[];
+  /** 타사 벤더 — 해당 벤더가 진단한 샘플, 반복 시 OR. q(진단명)와 함께면 같은 진단 행 매칭 */
+  vendor?: number[];
   /** 반복 지정 시 AND */
   tag?: number[];
   label?: number[];
@@ -139,6 +141,6 @@ export const MULTI_SEARCH_MAX = 500;
 export const BATCH_DOWNLOAD_MAX = 200;
 /** 배치 다운로드 총 용량 한도 (BE BATCH_MAX_TOTAL_BYTES 기본값 1GiB) */
 export const BATCH_DOWNLOAD_MAX_BYTES = 1 << 30;
-/** 배치 다운로드 ZIP 비밀번호 (BE 기본값 — env 로 변경 가능) */
+/** 다운로드 ZIP 비밀번호 — 단건·배치 공통 (BE ZIP_PASSWORD 기본값, env 로 변경 가능) */
 export const BATCH_ZIP_PASSWORD = 'infected';
 

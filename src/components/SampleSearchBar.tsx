@@ -46,11 +46,12 @@ const DICT_SECTIONS: { key: keyof typeof DICT_MODIFIERS; label: string; short?: 
   { key: 'pool', label: '풀' },
   { key: 'locale', label: '로케일' },
   { key: 'source', label: '수집 소스', short: '소스' },
+  { key: 'vendor', label: '진단 벤더', short: '벤더' },
   { key: 'tag', label: '태그' },
   { key: 'label', label: '위협 유형 (VT 라벨)', short: '위협 유형' },
 ];
 
-/** 필터 패널 select 배치 — 1행: 파일 타입 관련 9종(좁게), 2행: 나머지 5종 */
+/** 필터 패널 select 배치 — 1행: 파일 타입 관련 9종(좁게), 2행: 나머지 6종 */
 const PANEL_ROWS = [
   { sections: DICT_SECTIONS.slice(0, 9), minWidth: '76px' },
   { sections: DICT_SECTIONS.slice(9), minWidth: '104px' },
@@ -557,6 +558,14 @@ export function SampleSearchBar({ meta, onSearch, onExpandChange, inject }: Samp
             — <span style={codeStyle}>format:exe format:zip</span> 은 &quot;EXE 또는 ZIP&quot;.
             샘플당 값이 1개인 항목이라 <span style={codeStyle}>locale:china</span> 처럼 여러 값에
             걸려도 전부 OR 로 검색합니다.
+            <br />
+            <span style={{ color: theme.colors.text }}>
+              벤더도 <b>OR</b>
+            </span>{' '}
+            — <span style={codeStyle}>vendor:kaspersky</span> 는 &quot;카스퍼스키가 진단한
+            샘플&quot;(미진단 제외). 진단명과 함께 쓰면{' '}
+            <span style={codeStyle}>vendor:kaspersky Trojan.Win32</span> 처럼 &quot;그 벤더가 그
+            진단명을 준 샘플&quot;만 찾습니다.
             <br />
             <span style={{ color: theme.colors.text }}>
               태그·라벨은 <b>AND</b>

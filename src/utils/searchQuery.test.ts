@@ -8,7 +8,11 @@ const META: FilterMeta = {
     { id: 2, name: 'in the wild' },
   ],
   labels: [{ id: 10, name: 'critical' }],
-  vendors: [],
+  vendors: [
+    { id: 140, name: 'Kaspersky' },
+    { id: 141, name: 'Microsoft' },
+    { id: 142, name: 'McAfee' },
+  ],
   formats: [{ id: 20, name: 'EXE' }],
   categories: [{ id: 30, name: 'trojan' }],
   locales: [
@@ -28,6 +32,17 @@ const META: FilterMeta = {
 };
 
 describe('parseSearchInput', () => {
+  it('vendor 는 OR 누적 — 부분 일치 다건도 에러 없이 모두 보낸다', () => {
+    const r = parseSearchInput('vendor:kaspersky Trojan.Win32', META);
+    expect(r.errors).toEqual([]);
+    expect(r.freeText).toBe('Trojan.Win32');
+    expect(r.filters).toEqual({ vendor: [140] });
+
+    const multi = parseSearchInput('vendor:m', META); // Microsoft·McAfee 부분 일치
+    expect(multi.errors).toEqual([]);
+    expect(multi.filters).toEqual({ vendor: [141, 142] });
+  });
+
   it('사전 필터를 name → id 로 해석하고 자유 텍스트를 남긴다', () => {
     const r = parseSearchInput('format:exe tag:apt Trojan.Win32', META);
     expect(r.errors).toEqual([]);
